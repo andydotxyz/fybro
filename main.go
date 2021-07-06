@@ -1,3 +1,5 @@
+//go:generate fyne bundle -o bundled.go Icon.png
+
 package main
 
 import (
@@ -15,6 +17,7 @@ const prefTokenKey = "auth.token"
 
 func main() {
 	a := app.NewWithID("xyz.andy.fibro")
+	a.SetIcon(resourceIconPng)
 	w := a.NewWindow("Fibro: Discord")
 
 	u := &ui{}
