@@ -49,28 +49,43 @@ func (u *ui) loadChannels() {
 				continue // ignore voice and groupings for now
 			}
 
-			ms, err := u.conn.Client.Messages(c.ID, 15)
-			if err != nil {
-				continue
-			}
-
 			chn := &channel{id: int(c.ID), name: c.Name}
-			for i := len(ms) - 1; i >= 0; i-- { // newest message is first in response
-				m := ms[i]
-				msg := &message{author: m.Author.Username, content: m.Content}
-				chn.messages = append(chn.messages, msg)
+			if len(s.channels) == 0 {
+				chn.messages = u.loadRecentMessages(c.ID)
+				if s == u.currentServer {
+					u.currentChannel = chn
+					u.refresh()
+				}
 			}
-
 			s.channels = append(s.channels, chn)
 		}
 	}
+	u.refresh()
 
-	if len(u.data.servers) > 0 {
-		if len(u.data.servers[0].channels) > 0 {
-			u.currentChannel = u.data.servers[0].channels[0]
+	for _, s := range u.data.servers {
+		for i, c := range s.channels {
+			if i == 0 {
+				continue // we did this one above
+			}
+			c.messages = u.loadRecentMessages(discord.ChannelID(c.id))
 		}
 	}
-	u.refresh()
+}
+
+func (u *ui) loadRecentMessages(id discord.ChannelID) []*message {
+	ms, err := u.conn.Client.Messages(id, 15)
+	if err != nil {
+		return nil
+	}
+
+	var list []*message
+	for i := len(ms) - 1; i >= 0; i-- { // newest message is first in response
+		m := ms[i]
+		msg := &message{author: m.Author.Username, content: m.Content}
+		list = append(list, msg)
+	}
+
+	return list
 }
 
 func loadServers(s *session.Session, u *ui) {
