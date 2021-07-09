@@ -7,11 +7,13 @@ import (
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
+	"github.com/diamondburned/arikawa/discord"
 	"github.com/diamondburned/arikawa/session"
 )
 
 type ui struct {
 	servers, channels, messages *widget.List
+	create                      *widget.Entry
 
 	data           *appData
 	currentServer  *server
@@ -78,7 +80,14 @@ func (u *ui) makeUI() fyne.CanvasObject {
 			objs[1].(*widget.Label).SetText(u.currentChannel.messages[id].content)
 		})
 
-	content := container.NewHSplit(u.channels, u.messages)
+	u.create = widget.NewEntry()
+	u.create.OnSubmitted = u.send
+	messagePane := container.NewBorder(nil,
+		container.NewBorder(nil, nil, nil, widget.NewButtonWithIcon("",
+			theme.MailSendIcon(), func() {
+				u.send(u.create.Text)
+			}), u.create), nil, nil, u.messages)
+	content := container.NewHSplit(u.channels, messagePane)
 	content.Offset = 0.3
 	return container.NewBorder(nil, nil, u.servers, nil, content)
 }
@@ -87,4 +96,9 @@ func (u *ui) refresh() {
 	u.servers.Refresh()
 	u.channels.Refresh()
 	u.messages.Refresh()
+}
+
+func (u *ui) send(data string) {
+	u.conn.SendText(discord.ChannelID(u.currentChannel.id), data)
+	u.create.SetText("")
 }
