@@ -41,7 +41,6 @@ func (u *ui) makeUI() fyne.CanvasObject {
 	u.servers.OnSelected = func(id widget.ListItemID) {
 		u.currentServer = u.data.servers[id]
 		u.channels.Select(0)
-		u.refresh()
 	}
 
 	u.channels = widget.NewList(
@@ -59,7 +58,8 @@ func (u *ui) makeUI() fyne.CanvasObject {
 		})
 	u.channels.OnSelected = func(id widget.ListItemID) {
 		u.currentChannel = u.currentServer.channels[id]
-		u.refresh()
+		u.messages.Refresh()
+		u.messages.ScrollToBottom()
 	}
 
 	u.messages = widget.NewList(
@@ -90,12 +90,6 @@ func (u *ui) makeUI() fyne.CanvasObject {
 	content := container.NewHSplit(u.channels, messagePane)
 	content.Offset = 0.3
 	return container.NewBorder(nil, nil, u.servers, nil, content)
-}
-
-func (u *ui) refresh() {
-	u.servers.Refresh()
-	u.channels.Refresh()
-	u.messages.Refresh()
 }
 
 func (u *ui) send(data string) {
