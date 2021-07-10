@@ -70,14 +70,10 @@ func (u *ui) makeUI() fyne.CanvasObject {
 			return len(u.currentChannel.messages)
 		},
 		func() fyne.CanvasObject {
-			return container.NewVBox(
-				widget.NewLabelWithStyle("", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-				widget.NewLabel(""))
+			return newMessageCell(nil)
 		},
 		func(id widget.ListItemID, o fyne.CanvasObject) {
-			objs := o.(*fyne.Container).Objects
-			objs[0].(*widget.Label).SetText(u.currentChannel.messages[id].author)
-			objs[1].(*widget.Label).SetText(u.currentChannel.messages[id].content)
+			o.(*messageCell).setMessage(u.currentChannel.messages[id])
 		})
 
 	u.create = widget.NewEntry()

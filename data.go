@@ -39,6 +39,7 @@ type channel struct {
 
 type message struct {
 	content, author string
+	avatar          string
 }
 
 func (u *ui) loadChannels() {
@@ -82,7 +83,8 @@ func (u *ui) loadRecentMessages(id discord.ChannelID) []*message {
 	var list []*message
 	for i := len(ms) - 1; i >= 0; i-- { // newest message is first in response
 		m := ms[i]
-		msg := &message{author: m.Author.Username, content: m.Content}
+		msg := &message{author: m.Author.Username, content: m.Content,
+			avatar: m.Author.AvatarURL()}
 		list = append(list, msg)
 	}
 
@@ -123,7 +125,8 @@ func loadServers(s *session.Session, u *ui) {
 			return
 		}
 
-		ch.messages = append(ch.messages, &message{author: ev.Author.Username, content: ev.Content})
+		ch.messages = append(ch.messages, &message{author: ev.Author.Username, content: ev.Content,
+			avatar: ev.Author.AvatarURL()})
 		if ch == u.currentChannel {
 			u.messages.Refresh()
 			u.messages.ScrollToBottom()
