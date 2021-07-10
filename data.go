@@ -55,8 +55,8 @@ func (u *ui) loadChannels() {
 				chn.messages = u.loadRecentMessages(c.ID)
 				if s == u.currentServer {
 					u.currentChannel = chn
-					u.messages.Refresh()
-					u.messages.ScrollToBottom()
+					u.messages.Objects = nil
+					u.appendMessages(u.currentChannel.messages)
 				}
 			}
 			s.channels = append(s.channels, chn)
@@ -125,11 +125,11 @@ func loadServers(s *session.Session, u *ui) {
 			return
 		}
 
-		ch.messages = append(ch.messages, &message{author: ev.Author.Username, content: ev.Content,
-			avatar: ev.Author.AvatarURL()})
+		msg := &message{author: ev.Author.Username, content: ev.Content,
+			avatar: ev.Author.AvatarURL()}
+		ch.messages = append(ch.messages, msg)
 		if ch == u.currentChannel {
-			u.messages.Refresh()
-			u.messages.ScrollToBottom()
+			u.appendMessages([]*message{msg})
 		}
 	})
 

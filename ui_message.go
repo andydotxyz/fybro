@@ -9,6 +9,8 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
+const iconSize = float32(32)
+
 var (
 	resCache = map[string]fyne.Resource{}
 	resCacheLock sync.RWMutex
@@ -53,22 +55,24 @@ func (m *messageCell) setMessage(new *message) {
 }
 
 func (m *messageCell) CreateRenderer() fyne.WidgetRenderer {
+	body := widget.NewLabel("")
+	body.Wrapping = fyne.TextWrapWord
 	return &messageRenderer{m: m,
 		top: widget.NewLabelWithStyle("", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-		main: widget.NewLabel(""), pic: widget.NewIcon(nil)}
+		main: body, pic: widget.NewIcon(nil), sep: widget.NewSeparator()}
 }
 
 type messageRenderer struct {
 	m *messageCell
 	top, main *widget.Label
 	pic       *widget.Icon
+	sep       *widget.Separator
 }
 
 func (m *messageRenderer) Destroy() {
 }
 
 func (m *messageRenderer) Layout(s fyne.Size) {
-	iconSize := float32(32)
 	remainWidth := s.Width - iconSize - theme.Padding() * 2
 	remainStart := iconSize+theme.Padding()*2
 	m.pic.Resize(fyne.NewSize(iconSize, iconSize))
@@ -77,15 +81,20 @@ func (m *messageRenderer) Layout(s fyne.Size) {
 	m.top.Resize(fyne.NewSize(remainWidth, m.top.MinSize().Height))
 	m.main.Move(fyne.NewPos(remainStart, m.top.MinSize().Height-theme.Padding()*4))
 	m.main.Resize(fyne.NewSize(remainWidth, m.main.MinSize().Height))
+	m.sep.Move(fyne.NewPos(0, s.Height - theme.SeparatorThicknessSize()))
+	m.sep.Resize(fyne.NewSize(s.Width, theme.SeparatorThicknessSize()))
 }
 
 func (m *messageRenderer) MinSize() fyne.Size {
-	s := m.top.MinSize()
-	return fyne.NewSize(s.Width, s.Height*2 - theme.Padding()*4)
+	s1 := m.top.MinSize()
+	s2 := m.main.MinSize()
+	w := fyne.Max(s1.Width, s2.Width)
+	return fyne.NewSize(w + iconSize + theme.Padding()*2,
+		s1.Height + s2.Height - theme.Padding()*4)
 }
 
 func (m *messageRenderer) Objects() []fyne.CanvasObject {
-	return []fyne.CanvasObject{m.top, m.main, m.pic}
+	return []fyne.CanvasObject{m.top, m.main, m.pic, m.sep}
 }
 
 func (m *messageRenderer) Refresh() {

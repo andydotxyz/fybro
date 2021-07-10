@@ -12,13 +12,25 @@ import (
 )
 
 type ui struct {
-	servers, channels, messages *widget.List
-	create                      *widget.Entry
+	servers, channels *widget.List
+	messages          *fyne.Container
+	messageScroll     *container.Scroll
+	create            *widget.Entry
 
 	data           *appData
 	currentServer  *server
 	currentChannel *channel
 	conn           *session.Session
+}
+
+func (u *ui) appendMessages(list []*message) {
+	items := u.messages.Objects
+	for _, m := range list {
+		items = append(items, newMessageCell(m))
+	}
+	u.messages.Objects = items
+	u.messages.Refresh()
+	u.messageScroll.ScrollToBottom()
 }
 
 func (u *ui) makeUI() fyne.CanvasObject {
@@ -58,23 +70,12 @@ func (u *ui) makeUI() fyne.CanvasObject {
 		})
 	u.channels.OnSelected = func(id widget.ListItemID) {
 		u.currentChannel = u.currentServer.channels[id]
-		u.messages.Refresh()
-		u.messages.ScrollToBottom()
+		u.messages.Objects = nil
+		u.appendMessages(u.currentChannel.messages)
 	}
 
-	u.messages = widget.NewList(
-		func() int {
-			if u.currentChannel == nil {
-				return 0
-			}
-			return len(u.currentChannel.messages)
-		},
-		func() fyne.CanvasObject {
-			return newMessageCell(nil)
-		},
-		func(id widget.ListItemID, o fyne.CanvasObject) {
-			o.(*messageCell).setMessage(u.currentChannel.messages[id])
-		})
+	u.messages = container.NewVBox()
+	u.messageScroll = container.NewScroll(u.messages)
 
 	u.create = widget.NewEntry()
 	u.create.OnSubmitted = u.send
@@ -82,7 +83,7 @@ func (u *ui) makeUI() fyne.CanvasObject {
 		container.NewBorder(nil, nil, nil, widget.NewButtonWithIcon("",
 			theme.MailSendIcon(), func() {
 				u.send(u.create.Text)
-			}), u.create), nil, nil, u.messages)
+			}), u.create), nil, nil, u.messageScroll)
 	content := container.NewHSplit(u.channels, messagePane)
 	content.Offset = 0.3
 	return container.NewBorder(nil, nil, u.servers, nil, content)
