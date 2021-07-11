@@ -2,12 +2,19 @@ package main
 
 import (
 	"log"
+	"strings"
+	"sync"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
 
-	"github.com/diamondburned/arikawa/discord"
-	"github.com/diamondburned/arikawa/gateway"
-	"github.com/diamondburned/arikawa/session"
+	"github.com/diamondburned/arikawa/v2/discord"
+	"github.com/diamondburned/arikawa/v2/gateway"
+	"github.com/diamondburned/arikawa/v2/session"
+	"github.com/diamondburned/arikawa/v2/state"
+	"github.com/diamondburned/arikawa/v2/state/store/defaultstore"
+	"github.com/diamondburned/ningen/v2"
+	"github.com/diamondburned/ningen/v2/md"
 )
 
 type appData struct {
@@ -15,91 +22,116 @@ type appData struct {
 }
 
 type server struct {
-	id            int
+	id            uint64
 	name, iconURL string
 	channels      []*channel
+
+	avatar     fyne.Resource
+	avatarMu   sync.Mutex
+	avatarOnce sync.Once
 }
 
-func (s *server) icon() fyne.Resource {
-	// TODO cache this resource
-	icon, err := fyne.LoadResourceFromURLString(s.iconURL)
-	if err != nil {
-		fyne.LogError("Failed to read icon "+s.iconURL, err)
-		return nil
+func (s *server) setIconInto(img *canvas.Image) {
+	s.avatarMu.Lock()
+	avatar := s.avatar
+	s.avatarMu.Unlock()
+
+	if avatar != nil {
+		img.Resource = avatar
 	}
 
-	return icon
+	s.avatarOnce.Do(func() {
+		go func() {
+			// TODO cache this resource
+			icon, err := fyne.LoadResourceFromURLString(s.iconURL)
+			if err != nil {
+				fyne.LogError("Failed to read icon "+s.iconURL, err)
+				return
+			}
+
+			s.avatarMu.Lock()
+			s.avatar = icon
+			s.avatarMu.Unlock()
+
+			img.Refresh()
+		}()
+	})
 }
 
 type channel struct {
-	id       int
-	name     string
-	messages []*message
+	id   uint64
+	name string
 }
 
 type message struct {
-	content, author string
-	avatar          string
+	content string
+	author  string
+	avatar  string
 }
 
 func (u *ui) loadChannels() {
 	for _, s := range u.data.servers {
-		cs, _ := u.conn.Client.Channels(discord.GuildID(s.id))
+		cs, _ := u.conn.Channels(discord.GuildID(s.id))
 		for _, c := range cs {
-			if c.Type == discord.GuildCategory || c.Type == discord.GuildVoice {
+			if c.Type != discord.GuildText {
 				continue // ignore voice and groupings for now
 			}
 
-			chn := &channel{id: int(c.ID), name: c.Name}
-			if len(s.channels) == 0 {
-				chn.messages = u.loadRecentMessages(c.ID)
-				if s == u.currentServer {
-					u.currentChannel = chn
-					u.messages.Objects = nil
-					u.appendMessages(u.currentChannel.messages)
-				}
-			}
+			chn := &channel{id: uint64(c.ID), name: c.Name}
 			s.channels = append(s.channels, chn)
 		}
 	}
 	u.channels.Refresh()
+}
 
-	for _, s := range u.data.servers {
-		for i, c := range s.channels {
-			if i == 0 {
-				continue // we did this one above
-			}
-			c.messages = u.loadRecentMessages(discord.ChannelID(c.id))
-		}
-	}
+func (u *ui) renderMessage(m *discord.Message) *message {
+	node := md.ParseWithMessage([]byte(m.Content), u.conn.Cabinet, m, true)
+	var builder strings.Builder
+	md.DefaultRenderer.Render(&builder, []byte(m.Content), node)
+
+	return &message{author: m.Author.Username,
+		content: strings.TrimSuffix(builder.String(), "\n"),
+		avatar:  m.Author.AvatarURLWithType(discord.PNGImage) + "?size=64"}
 }
 
 func (u *ui) loadRecentMessages(id discord.ChannelID) []*message {
-	ms, err := u.conn.Client.Messages(id, 15)
+	ms, err := u.conn.Messages(id)
 	if err != nil {
 		return nil
 	}
 
 	var list []*message
+	var subscribed bool
+
 	for i := len(ms) - 1; i >= 0; i-- { // newest message is first in response
 		m := ms[i]
-		msg := &message{author: m.Author.Username, content: m.Content,
-			avatar: m.Author.AvatarURL()}
-		list = append(list, msg)
+		list = append(list, u.renderMessage(&m))
+
+		if !subscribed && m.GuildID.IsValid() {
+			u.conn.MemberState.Subscribe(m.GuildID)
+			subscribed = true
+		}
 	}
 
 	return list
 }
 
-func loadServers(s *session.Session, u *ui) {
-	var servers []*server
-	gs, err := s.Client.Guilds(0)
+func loadServers(session *session.Session, u *ui) {
+	cabinet := defaultstore.New()
+	cabinet.MessageStore = defaultstore.NewMessage(25) // 25 messages max
+
+	state := state.NewFromSession(session, cabinet)
+
+	gs, err := state.Guilds()
 	if err != nil {
 		log.Println("Error getting guilds")
 		return
 	}
+
+	var servers []*server
 	for _, g := range gs {
-		servers = append(servers, &server{name: g.Name, id: int(g.ID), iconURL: g.IconURL()})
+		servers = append(servers, &server{name: g.Name, id: uint64(g.ID),
+			iconURL: g.IconURLWithType(discord.PNGImage) + "?size=64"})
 	}
 
 	u.data = &appData{servers: servers}
@@ -111,32 +143,36 @@ func loadServers(s *session.Session, u *ui) {
 	}
 	u.servers.Refresh()
 
-	u.conn = s
-	err = s.Open()
+	u.conn, err = ningen.FromState(state)
 	if err != nil {
+		log.Println("Error wrapping Discord session", err)
+		return
+	}
+
+	u.conn.AddHandler(func(msg *gateway.MessageCreateEvent) {
+		u.currentMu.Lock()
+		defer u.currentMu.Unlock()
+
+		if u.currentChannel == nil ||
+			uint64(msg.ChannelID) != u.currentChannel.id {
+			return
+		}
+
+		u.appendMessages([]*message{
+			u.renderMessage(&msg.Message),
+		})
+	})
+
+	if err = u.conn.Open(); err != nil {
 		log.Println("Error opening session", err)
 		u.conn = nil
 		return
 	}
-	s.AddHandler(func(ev *gateway.MessageCreateEvent) {
-		ch := findChan(u.data, int(ev.GuildID), int(ev.ChannelID))
-		if ch == nil {
-			log.Println("Could not find channel for incoming message")
-			return
-		}
-
-		msg := &message{author: ev.Author.Username, content: ev.Content,
-			avatar: ev.Author.AvatarURL()}
-		ch.messages = append(ch.messages, msg)
-		if ch == u.currentChannel {
-			u.appendMessages([]*message{msg})
-		}
-	})
 
 	u.loadChannels()
 }
 
-func findChan(d *appData, sID, cID int) *channel {
+func findChan(d *appData, sID, cID uint64) *channel {
 	for _, s := range d.servers {
 		if s.id == sID {
 			for _, c := range s.channels {

@@ -10,7 +10,7 @@ import (
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
 
-	"github.com/diamondburned/arikawa/session"
+	"github.com/diamondburned/arikawa/v2/session"
 )
 
 const prefTokenKey = "auth.token"
@@ -46,13 +46,33 @@ func login(w fyne.Window, p fyne.Preferences, u *ui) {
 
 	email := widget.NewEntry()
 	pass := widget.NewPasswordEntry()
-	dialog.ShowForm("Log in to Discord", "Log in", "cancel",
+	dialog.ShowForm("Log in to Discord", "Log in", "Use Token instead",
 		[]*widget.FormItem{
 			{Text: "Email", Widget: email},
 			{Text: "Password", Widget: pass},
 		}, func(ok bool) {
 			if ok {
 				doLogin(email.Text, pass.Text, w, p, u)
+			} else {
+				showTokenForm(w, p, u)
+			}
+		}, w)
+}
+
+func showTokenForm(w fyne.Window, p fyne.Preferences, u *ui) {
+	token := widget.NewPasswordEntry()
+	dialog.ShowForm("Log in to Discord using a token", "Log in", "Cancel",
+		[]*widget.FormItem{
+			{Text: "Token", Widget: token},
+		}, func(ok bool) {
+			if ok {
+				s, err := session.New(token.Text)
+				if err != nil {
+					log.Println("Login Err", err)
+					return
+				}
+				p.SetString(prefTokenKey, token.Text)
+				loadServers(s, u)
 			}
 		}, w)
 }
