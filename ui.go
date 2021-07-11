@@ -1,14 +1,16 @@
 package main
 
 import (
+	"sync"
+
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
-	"github.com/diamondburned/arikawa/discord"
-	"github.com/diamondburned/arikawa/session"
+	"github.com/diamondburned/arikawa/v2/discord"
+	"github.com/diamondburned/ningen/v2"
 )
 
 type ui struct {
@@ -17,16 +19,29 @@ type ui struct {
 	messageScroll     *container.Scroll
 	create            *widget.Entry
 
-	data           *appData
+	data *appData
+
+	currentMu      sync.Mutex
 	currentServer  *server
 	currentChannel *channel
-	conn           *session.Session
+	conn           *ningen.State
 }
 
 func (u *ui) appendMessages(list []*message) {
 	items := u.messages.Objects
 	for _, m := range list {
-		items = append(items, newMessageCell(m))
+		cell := newMessageCell(m)
+
+		if len(items) > 0 {
+			// If the last author is the same as this new message, then we can
+			// render a small version of it.
+			last, ok := items[len(items)-1].(*messageCell)
+			if ok && last.msg.author == cell.msg.author {
+				cell.small = true
+			}
+		}
+
+		items = append(items, cell)
 	}
 	u.messages.Objects = items
 	u.messages.Refresh()
@@ -47,8 +62,7 @@ func (u *ui) makeUI() fyne.CanvasObject {
 			return img
 		},
 		func(id widget.ListItemID, o fyne.CanvasObject) {
-			o.(*canvas.Image).Resource = u.data.servers[id].icon()
-			o.Refresh()
+			u.data.servers[id].setIconInto(o.(*canvas.Image))
 		})
 	u.servers.OnSelected = func(id widget.ListItemID) {
 		u.currentServer = u.data.servers[id]
@@ -69,9 +83,14 @@ func (u *ui) makeUI() fyne.CanvasObject {
 			o.(*widget.Label).SetText("# " + u.currentServer.channels[id].name)
 		})
 	u.channels.OnSelected = func(id widget.ListItemID) {
+		u.currentMu.Lock()
+		defer u.currentMu.Unlock()
+
 		u.currentChannel = u.currentServer.channels[id]
 		u.messages.Objects = nil
-		u.appendMessages(u.currentChannel.messages)
+
+		msgs := u.loadRecentMessages(discord.ChannelID(u.currentChannel.id))
+		u.appendMessages(msgs)
 	}
 
 	u.messages = container.NewVBox()
