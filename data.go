@@ -102,11 +102,14 @@ func loadServers(s *session.Session, u *ui) {
 		servers = append(servers, &server{name: g.Name, id: int(g.ID), iconURL: g.IconURL()})
 	}
 
-	u.data = &appData{servers: servers}
+	if u.data == nil {
+		u.data = &appData{}
+	}
+	u.data.servers = append(u.data.servers, servers...)
 	u.currentServer = nil
 	u.currentChannel = nil
-	if len(servers) > 0 {
-		u.currentServer = servers[0]
+	if len(u.data.servers) > 0 {
+		u.currentServer = u.data.servers[0]
 		u.servers.Select(0)
 	}
 	u.servers.Refresh()

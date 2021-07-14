@@ -52,6 +52,7 @@ func (u *ui) makeUI() fyne.CanvasObject {
 		})
 	u.servers.OnSelected = func(id widget.ListItemID) {
 		u.currentServer = u.data.servers[id]
+		u.channels.Unselect(0)
 		u.channels.Select(0)
 	}
 
