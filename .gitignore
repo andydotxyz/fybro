@@ -4,3 +4,5 @@ fibro.exe
 
 .idea/
 
+// don't accidentally commit secret keys!
+secrets.go
