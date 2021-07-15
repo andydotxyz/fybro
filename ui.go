@@ -13,6 +13,7 @@ type ui struct {
 	messages          *fyne.Container
 	messageScroll     *container.Scroll
 	create            *widget.Entry
+	win               fyne.Window
 
 	data           *appData
 	currentServer  *server
@@ -66,9 +67,7 @@ func (u *ui) makeUI() fyne.CanvasObject {
 			o.(*widget.Label).SetText("# " + u.currentServer.channels[id].name)
 		})
 	u.channels.OnSelected = func(id widget.ListItemID) {
-		u.currentChannel = u.currentServer.channels[id]
-		u.messages.Objects = nil
-		u.appendMessages(u.currentChannel.messages)
+		u.setChannel(u.currentServer.channels[id])
 	}
 
 	u.messages = container.NewVBox()
@@ -90,4 +89,12 @@ func (u *ui) send(data string) {
 	srv := u.currentServer.service
 	srv.send(u.currentChannel, data)
 	u.create.SetText("")
+}
+
+func (u *ui) setChannel(ch *channel) {
+	u.win.SetTitle(winTitle + ":" + ch.server.name + ":" + ch.name)
+
+	u.currentChannel = ch
+	u.messages.Objects = nil
+	u.appendMessages(u.currentChannel.messages)
 }

@@ -37,7 +37,10 @@ func (t *telegram) login(w fyne.Window, prefix string, u *ui) {
 	m, err := mtproto.NewMTProto(telegramAppID, telegramAppHash,
 		mtproto.WithServer(t.ip, false),
 		mtproto.WithAuthFile(authFile.Path(), !exists))
-
+	if err != nil {
+		fyne.LogError("Connect failed", err)
+		return
+	}
 	err = m.Connect()
 	t.proto = m
 	if err != nil {
@@ -162,9 +165,6 @@ func (t *telegram) loadServers(s *mtproto.MTProto, w fyne.Window, prefix string,
 		u.data = &appData{}
 	}
 	u.data.servers = append(u.data.servers, srv)
-
-	u.currentServer = nil
-	u.currentChannel = nil
 	if len(u.data.servers) > 0 {
 		u.currentServer = u.data.servers[0]
 		u.servers.Select(0)
@@ -186,14 +186,12 @@ func (t *telegram) loadServers(s *mtproto.MTProto, w fyne.Window, prefix string,
 	}
 	for _, c := range (*ret).(mtproto.TL_messages_chats).Chats {
 		chat := c.(mtproto.TL_chat)
-		chn := &channel{name: chat.Title, id: int(chat.Id), direct: false}
+		chn := &channel{name: chat.Title, id: int(chat.Id), direct: false, server: srv}
 
 		if len(srv.channels) == 0 {
 			chn.messages = u.loadMessages(s, chn.id, false)
 			if srv == u.currentServer {
-				u.currentChannel = chn
-				u.messages.Objects = nil
-				u.appendMessages(u.currentChannel.messages)
+				u.setChannel(chn)
 			}
 		}
 		srv.channels = append(srv.channels, chn)
@@ -204,14 +202,12 @@ func (t *telegram) loadServers(s *mtproto.MTProto, w fyne.Window, prefix string,
 	ret, err = s.ContactsGetTopPeers(true, false, false, false, false, 0, 0, 0)
 	for _, c := range (*ret).(mtproto.TL_contacts_topPeers).Users {
 		chat := c.(mtproto.TL_user)
-		chn := &channel{name: chat.Phone, id: int(chat.Id), direct: true}
+		chn := &channel{name: chat.Phone, id: int(chat.Id), direct: true, server: srv}
 
 		if len(srv.channels) == 0 {
 			chn.messages = u.loadMessages(s, chn.id, true)
 			if srv == u.currentServer {
-				u.currentChannel = chn
-				u.messages.Objects = nil
-				u.appendMessages(u.currentChannel.messages)
+				u.setChannel(chn)
 			}
 		}
 		srv.channels = append(srv.channels, chn)

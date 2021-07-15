@@ -37,13 +37,11 @@ func (d *discord) loadChannels(u *ui) {
 				continue // ignore voice and groupings for now
 			}
 
-			chn := &channel{id: int(c.ID), name: c.Name}
+			chn := &channel{id: int(c.ID), name: c.Name, server: s}
 			if len(s.channels) == 0 {
 				chn.messages = d.loadRecentMessages(c.ID)
 				if s == u.currentServer {
-					u.currentChannel = chn
-					u.messages.Objects = nil
-					u.appendMessages(u.currentChannel.messages)
+					u.setChannel(chn)
 				}
 			}
 			s.channels = append(s.channels, chn)
@@ -95,8 +93,6 @@ func (d *discord) loadServers(s *session.Session, u *ui) {
 		u.data = &appData{}
 	}
 	u.data.servers = append(u.data.servers, servers...)
-	u.currentServer = nil
-	u.currentChannel = nil
 	if len(u.data.servers) > 0 {
 		u.currentServer = u.data.servers[0]
 		u.servers.Select(0)

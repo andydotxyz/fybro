@@ -31,6 +31,7 @@ type channel struct {
 	id       int
 	name     string
 	messages []*message
+	server   *server
 }
 
 type message struct {

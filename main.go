@@ -14,14 +14,16 @@ const (
 	prefServerCountKey = "server.count"
 	prefServerPrefix   = "server.%d."
 	prefServerTypeKey  = "type"
+
+	winTitle = "Fibro"
 )
 
 func main() {
 	a := app.NewWithID("xyz.andy.fibro")
 	a.SetIcon(resourceIconPng)
-	w := a.NewWindow("Fibro: Discord")
+	w := a.NewWindow(winTitle)
 
-	u := &ui{}
+	u := &ui{win: w}
 	w.SetContent(u.makeUI())
 	w.Resize(fyne.NewSize(480, 320))
 	go u.runLogins(w, a)
