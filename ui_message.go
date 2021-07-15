@@ -12,7 +12,7 @@ import (
 const iconSize = float32(32)
 
 var (
-	resCache = map[string]fyne.Resource{}
+	resCache     = map[string]fyne.Resource{}
 	resCacheLock sync.RWMutex
 )
 
@@ -58,12 +58,12 @@ func (m *messageCell) CreateRenderer() fyne.WidgetRenderer {
 	body := widget.NewLabel("")
 	body.Wrapping = fyne.TextWrapWord
 	return &messageRenderer{m: m,
-		top: widget.NewLabelWithStyle("", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+		top:  widget.NewLabelWithStyle("", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 		main: body, pic: widget.NewIcon(nil), sep: widget.NewSeparator()}
 }
 
 type messageRenderer struct {
-	m *messageCell
+	m         *messageCell
 	top, main *widget.Label
 	pic       *widget.Icon
 	sep       *widget.Separator
@@ -73,15 +73,15 @@ func (m *messageRenderer) Destroy() {
 }
 
 func (m *messageRenderer) Layout(s fyne.Size) {
-	remainWidth := s.Width - iconSize - theme.Padding() * 2
-	remainStart := iconSize+theme.Padding()*2
+	remainWidth := s.Width - iconSize - theme.Padding()*2
+	remainStart := iconSize + theme.Padding()*2
 	m.pic.Resize(fyne.NewSize(iconSize, iconSize))
 	m.pic.Move(fyne.NewPos(theme.Padding(), theme.Padding()))
 	m.top.Move(fyne.NewPos(remainStart, -theme.Padding()))
 	m.top.Resize(fyne.NewSize(remainWidth, m.top.MinSize().Height))
 	m.main.Move(fyne.NewPos(remainStart, m.top.MinSize().Height-theme.Padding()*4))
 	m.main.Resize(fyne.NewSize(remainWidth, m.main.MinSize().Height))
-	m.sep.Move(fyne.NewPos(0, s.Height - theme.SeparatorThicknessSize()))
+	m.sep.Move(fyne.NewPos(0, s.Height-theme.SeparatorThicknessSize()))
 	m.sep.Resize(fyne.NewSize(s.Width, theme.SeparatorThicknessSize()))
 }
 
@@ -89,8 +89,8 @@ func (m *messageRenderer) MinSize() fyne.Size {
 	s1 := m.top.MinSize()
 	s2 := m.main.MinSize()
 	w := fyne.Max(s1.Width, s2.Width)
-	return fyne.NewSize(w + iconSize + theme.Padding()*2,
-		s1.Height + s2.Height - theme.Padding()*4)
+	return fyne.NewSize(w+iconSize+theme.Padding()*2,
+		s1.Height+s2.Height-theme.Padding()*4)
 }
 
 func (m *messageRenderer) Objects() []fyne.CanvasObject {
@@ -102,5 +102,3 @@ func (m *messageRenderer) Refresh() {
 	m.main.SetText(m.m.msg.content)
 	go m.pic.SetResource(m.m.avatarResource())
 }
-
-
