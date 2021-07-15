@@ -27,6 +27,7 @@ func (s *server) icon() fyne.Resource {
 }
 
 type channel struct {
+	direct   bool
 	id       int
 	name     string
 	messages []*message
@@ -40,11 +41,18 @@ type message struct {
 func findChan(d *appData, sID, cID int) *channel {
 	for _, s := range d.servers {
 		if s.id == sID {
-			for _, c := range s.channels {
-				if c.id == cID {
-					return c
-				}
+			if c := findServerChan(s, cID); c != nil {
+				return c
 			}
+		}
+	}
+	return nil
+}
+
+func findServerChan(s *server, cID int) *channel {
+	for _, c := range s.channels {
+		if c.id == cID {
+			return c
 		}
 	}
 	return nil
