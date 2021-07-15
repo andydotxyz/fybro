@@ -6,9 +6,6 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
-
-	"github.com/diamondburned/arikawa/discord"
-	"github.com/diamondburned/arikawa/session"
 )
 
 type ui struct {
@@ -20,7 +17,6 @@ type ui struct {
 	data           *appData
 	currentServer  *server
 	currentChannel *channel
-	conn           *session.Session
 }
 
 func (u *ui) appendMessages(list []*message) {
@@ -91,6 +87,7 @@ func (u *ui) makeUI() fyne.CanvasObject {
 }
 
 func (u *ui) send(data string) {
-	u.conn.SendText(discord.ChannelID(u.currentChannel.id), data)
+	srv := u.currentServer.service
+	srv.send(u.currentChannel, data)
 	u.create.SetText("")
 }
