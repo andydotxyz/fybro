@@ -96,7 +96,7 @@ func (t *telegram) login(prefix string, u *ui) {
 						cid = m.To_id.(mtproto.TL_peerUser).User_id
 					}
 					msg := &message{author: strconv.Itoa(int(m.From_id)), content: m.Message}
-					ch := findServerChan(t.server, int(cid))
+					ch := findServerChan(t.server, strconv.Itoa(int(cid)))
 					ch.messages = append(ch.messages, msg)
 
 					if ch == u.currentChannel {
@@ -182,10 +182,11 @@ func (t *telegram) loadServers(s *mtproto.MTProto, prefix string, u *ui) {
 	}
 	for _, c := range (*ret).(mtproto.TL_messages_chats).Chats {
 		chat := c.(mtproto.TL_chat)
-		chn := &channel{name: chat.Title, id: int(chat.Id), direct: false, server: srv}
+		chn := &channel{name: chat.Title, id: strconv.Itoa(int(chat.Id)), direct: false, server: srv}
 
 		if len(srv.channels) == 0 {
-			chn.messages = u.loadMessages(s, chn.id, false)
+			id, _ := strconv.Atoi(chn.id)
+			chn.messages = u.loadMessages(s, id, false)
 			if srv == u.currentServer {
 				u.setChannel(chn)
 			}
@@ -198,10 +199,11 @@ func (t *telegram) loadServers(s *mtproto.MTProto, prefix string, u *ui) {
 	ret, err = s.ContactsGetTopPeers(true, false, false, false, false, 0, 0, 0)
 	for _, c := range (*ret).(mtproto.TL_contacts_topPeers).Users {
 		chat := c.(mtproto.TL_user)
-		chn := &channel{name: chat.Phone, id: int(chat.Id), direct: true, server: srv}
+		chn := &channel{name: chat.Phone, id: strconv.Itoa(int(chat.Id)), direct: true, server: srv}
 
 		if len(srv.channels) == 0 {
-			chn.messages = u.loadMessages(s, chn.id, true)
+			cid, _ := strconv.Atoi(chn.id)
+			chn.messages = u.loadMessages(s, cid, true)
 			if srv == u.currentServer {
 				u.setChannel(chn)
 			}
@@ -214,7 +216,8 @@ func (t *telegram) loadServers(s *mtproto.MTProto, prefix string, u *ui) {
 		if i == 0 {
 			continue // we did this one above
 		}
-		c.messages = u.loadMessages(s, c.id, c.direct)
+		id, _ := strconv.Atoi(c.id)
+		c.messages = u.loadMessages(s, id, c.direct)
 	}
 }
 
@@ -244,11 +247,12 @@ func (u *ui) loadMessages(s *mtproto.MTProto, id int, direct bool) []*message {
 }
 
 func (t *telegram) send(ch *channel, text string) {
+	id, _ := strconv.Atoi(ch.id)
 	var nid mtproto.TL
 	if ch.direct {
-		nid = mtproto.TL_inputPeerUser{User_id: int32(ch.id)}
+		nid = mtproto.TL_inputPeerUser{User_id: int32(id)}
 	} else {
-		nid = mtproto.TL_inputPeerChat{Chat_id: int32(ch.id)}
+		nid = mtproto.TL_inputPeerChat{Chat_id: int32(id)}
 	}
 
 	t.proto.MessagesSendMessage(true, false, false, true,

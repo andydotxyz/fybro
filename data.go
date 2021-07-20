@@ -9,7 +9,7 @@ type appData struct {
 }
 
 type server struct {
-	id            int
+	id            string
 	name, iconURL string
 	channels      []*channel
 	service       service
@@ -28,7 +28,7 @@ func (s *server) icon() fyne.Resource {
 
 type channel struct {
 	direct   bool
-	id       int
+	id       string
 	name     string
 	messages []*message
 	server   *server
@@ -39,7 +39,7 @@ type message struct {
 	avatar          string
 }
 
-func findChan(d *appData, sID, cID int) *channel {
+func findChan(d *appData, sID, cID string) *channel {
 	for _, s := range d.servers {
 		if s.id == sID {
 			if c := findServerChan(s, cID); c != nil {
@@ -50,7 +50,7 @@ func findChan(d *appData, sID, cID int) *channel {
 	return nil
 }
 
-func findServerChan(s *server, cID int) *channel {
+func findServerChan(s *server, cID string) *channel {
 	for _, c := range s.channels {
 		if c.id == cID {
 			return c

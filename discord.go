@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"strconv"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/dialog"
@@ -42,13 +43,14 @@ func (d *discord) disconnect() {
 
 func (d *discord) loadChannels(u *ui) {
 	for _, s := range u.data.servers {
-		cs, _ := d.conn.Client.Channels(discapi.GuildID(s.id))
+		id, _ := strconv.Atoi(s.id)
+		cs, _ := d.conn.Client.Channels(discapi.GuildID(id))
 		for _, c := range cs {
 			if c.Type == discapi.GuildCategory || c.Type == discapi.GuildVoice {
 				continue // ignore voice and groupings for now
 			}
 
-			chn := &channel{id: int(c.ID), name: c.Name, server: s}
+			chn := &channel{id: strconv.Itoa(int(c.ID)), name: c.Name, server: s}
 			if len(s.channels) == 0 {
 				chn.messages = d.loadRecentMessages(c.ID)
 				if s == u.currentServer {
@@ -65,7 +67,9 @@ func (d *discord) loadChannels(u *ui) {
 			if i == 0 {
 				continue // we did this one above
 			}
-			c.messages = d.loadRecentMessages(discapi.ChannelID(c.id))
+
+			id, _ := strconv.Atoi(c.id)
+			c.messages = d.loadRecentMessages(discapi.ChannelID(id))
 		}
 	}
 }
@@ -97,7 +101,7 @@ func (d *discord) loadServers(s *session.Session, u *ui) {
 		return
 	}
 	for _, g := range gs {
-		servers = append(servers, &server{service: d, name: g.Name, id: int(g.ID), iconURL: g.IconURL()})
+		servers = append(servers, &server{service: d, name: g.Name, id: strconv.Itoa(int(g.ID)), iconURL: g.IconURL()})
 	}
 
 	if u.data == nil {
@@ -117,7 +121,7 @@ func (d *discord) loadServers(s *session.Session, u *ui) {
 		return
 	}
 	s.AddHandler(func(ev *gateway.MessageCreateEvent) {
-		ch := findChan(u.data, int(ev.GuildID), int(ev.ChannelID))
+		ch := findChan(u.data, strconv.Itoa(int(ev.GuildID)), strconv.Itoa(int(ev.ChannelID)))
 		if ch == nil {
 			log.Println("Could not find channel for incoming message")
 			return
@@ -148,7 +152,8 @@ func (d *discord) login(prefix string, u *ui) {
 }
 
 func (d *discord) send(ch *channel, text string) {
-	d.conn.SendText(discapi.ChannelID(ch.id), text)
+	id, _ := strconv.Atoi(ch.id)
+	d.conn.SendText(discapi.ChannelID(id), text)
 }
 
 func (d *discord) doLogin(email, pass string, p fyne.Preferences, prefix string, u *ui) {
