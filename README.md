@@ -6,11 +6,15 @@ Feel free to play, but don't expect it to do much!
 ## Features
 
 - [x] Multiple services supported
-  - [x] Discord
-  - [x] Telegram
 - [x] Switch servers and channels
 - [x] Load recent and new messages
 - [x] Send messages
+
+| Server | Read | Send | Groups | Contacts |
+| ------ | ---- | ---- | ------ | -------- |
+| **Discord** | ✔ | ✔ | ✔ | ✔ | 
+| **Telegram** | ✔ | ✔ | ✔ | ✘ |
+| **WhatsApp** | ✔ | ✔ | ✔ | ✘ |
 
 *Urgent*
 

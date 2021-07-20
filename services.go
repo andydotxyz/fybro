@@ -18,6 +18,7 @@ var (
 	services  = map[string]func(fyne.App) service{
 		"discord":  initDiscord,
 		"telegram": initTelegram,
+		"whatsapp": initWhatsApp,
 	}
 )
 
