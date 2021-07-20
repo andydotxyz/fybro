@@ -27,12 +27,23 @@ func initTelegram(a fyne.App) service {
 	return &telegram{app: a, ip: telegramDefaultIP}
 }
 
+func (t *telegram) configure(u *ui) (fyne.CanvasObject, func(prefix string, a fyne.App)) {
+	tel := widget.NewEntry()
+	return widget.NewForm(
+			&widget.FormItem{Text: "Telephone", Widget: tel}),
+		func(prefix string, a fyne.App) {
+			a.Preferences().SetString(prefix+prefTelegramTelKey, tel.Text)
+
+			t.login(prefix, u)
+		}
+}
+
 func (t *telegram) disconnect() {
 	_ = t.proto.Disconnect()
 }
 
-func (t *telegram) login(w fyne.Window, prefix string, u *ui) {
-	authFile, _ := storage.Child(t.app.Storage().RootURI(), "server.1.auth.token")
+func (t *telegram) login(prefix string, u *ui) {
+	authFile, _ := storage.Child(t.app.Storage().RootURI(), prefix+"auth.token")
 	exists, _ := storage.Exists(authFile)
 	m, err := mtproto.NewMTProto(telegramAppID, telegramAppHash,
 		mtproto.WithServer(t.ip, false),
@@ -99,65 +110,50 @@ func (t *telegram) login(w fyne.Window, prefix string, u *ui) {
 			}
 		}()
 	}
-
-	p := t.app.Preferences()
-	num := p.String(prefix + prefTelegramTelKey)
 	if exists {
-		t.loadServers(m, w, prefix, u)
+		t.loadServers(m, prefix, u)
 		return
 	}
 
-	tel := widget.NewEntry()
-	tel.SetText(num)
-	dialog.ShowForm("Log in to Telegram", "Log in", "cancel",
+	p := t.app.Preferences()
+	num := p.String(prefix + prefTelegramTelKey)
+	c, err := m.AuthSendCode(num)
+	if err != nil {
+		if status, ok := err.(mtproto.TL_rpc_error); ok {
+			if status.Error_message == "AUTH_RESTART" {
+				t.login(prefix, u)
+			} else if strings.ContainsAny(status.Error_message, "PHONE_MIGRATE_") {
+				id, _ := strconv.Atoi(status.Error_message[14:])
+				storage.Delete(authFile)
+
+				t.ip, _ = m.GetDCIP(int32(id))
+				t.login(prefix, u)
+			} else {
+				fyne.LogError("Unknown protocol error", err)
+			}
+		} else {
+			fyne.LogError("Unknown error", err)
+		}
+		return
+	}
+	hash := c.Phone_code_hash
+	conf := widget.NewEntry()
+	dialog.ShowForm("Telegram code for "+num, "Log in", "cancel",
 		[]*widget.FormItem{
-			{Text: "Telephone", Widget: tel},
+			{Text: "Auth Code", Widget: conf},
 		}, func(ok bool) {
-			if !ok {
-				return
-			}
-
-			num := tel.Text
-			c, err := m.AuthSendCode(tel.Text)
+			code := conf.Text
+			_, err := m.AuthSignIn(num, code, hash)
 			if err != nil {
-				if status, ok := err.(mtproto.TL_rpc_error); ok {
-					if status.Error_message == "AUTH_RESTART" {
-						t.login(w, prefix, u)
-					} else if strings.ContainsAny(status.Error_message, "PHONE_MIGRATE_") {
-						id, _ := strconv.Atoi(status.Error_message[14:])
-						storage.Delete(authFile)
-
-						t.ip, _ = m.GetDCIP(int32(id))
-						t.login(w, prefix, u)
-					} else {
-						fyne.LogError("Unknown protocol error", err)
-					}
-				} else {
-					fyne.LogError("Unknown error", err)
-				}
+				fyne.LogError("Failed to log in to telegram", err)
 				return
 			}
-			hash := c.Phone_code_hash
-			conf := widget.NewEntry()
-			dialog.ShowForm("Log in to Discord", "Log in", "cancel",
-				[]*widget.FormItem{
-					{Text: "Telephone", Widget: tel},
-					{Text: "Auth Code", Widget: conf},
-				}, func(ok bool) {
-					code := conf.Text
-					_, err := m.AuthSignIn(num, code, hash)
-					if err != nil {
-						fyne.LogError("Failed to log in to telegram", err)
-						return
-					}
 
-					p.SetString(prefTelegramTelKey, num)
-					t.loadServers(m, w, prefix, u)
-				}, w)
-		}, w)
+			t.loadServers(m, prefix, u)
+		}, u.win)
 }
 
-func (t *telegram) loadServers(s *mtproto.MTProto, w fyne.Window, prefix string, u *ui) {
+func (t *telegram) loadServers(s *mtproto.MTProto, prefix string, u *ui) {
 	srv := &server{service: t, name: "Telegram", iconURL: "https://osx.telegram.org/updates/site/logo.png"}
 	t.server = srv
 
@@ -176,9 +172,9 @@ func (t *telegram) loadServers(s *mtproto.MTProto, w fyne.Window, prefix string,
 	if err != nil {
 		if status, ok := err.(mtproto.TL_rpc_error); ok {
 			strings.ContainsAny(status.Error_message, "AUTH")
-			authFile, _ := storage.Child(t.app.Storage().RootURI(), "server.1.auth.token")
+			authFile, _ := storage.Child(t.app.Storage().RootURI(), prefix+"auth.token")
 			_ = storage.Delete(authFile)
-			t.login(w, prefix, u)
+			t.login(prefix, u)
 			return
 		} else {
 			fyne.LogError("Unknown protocol error", err)

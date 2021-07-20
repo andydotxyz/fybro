@@ -23,6 +23,17 @@ func initDiscord(a fyne.App) service {
 	return &discord{app: a}
 }
 
+func (d *discord) configure(u *ui) (fyne.CanvasObject, func(prefix string, a fyne.App)) {
+	email := widget.NewEntry()
+	pass := widget.NewPasswordEntry()
+	return widget.NewForm(
+			&widget.FormItem{Text: "Email", Widget: email},
+			&widget.FormItem{Text: "Password", Widget: pass}),
+		func(prefix string, a fyne.App) {
+			d.doLogin(email.Text, pass.Text, d.app.Preferences(), prefix, u)
+		}
+}
+
 func (d *discord) disconnect() {
 	if d.conn != nil {
 		_ = d.conn.Close()
@@ -123,7 +134,7 @@ func (d *discord) loadServers(s *session.Session, u *ui) {
 	d.loadChannels(u)
 }
 
-func (d *discord) login(w fyne.Window, prefix string, u *ui) {
+func (d *discord) login(prefix string, u *ui) {
 	tok := d.app.Preferences().String(prefix + prefDiscordTokenKey)
 	if tok != "" {
 		sess, err := session.New(tok)
@@ -134,25 +145,13 @@ func (d *discord) login(w fyne.Window, prefix string, u *ui) {
 			log.Println("Error connecting with token", err)
 		}
 	}
-
-	email := widget.NewEntry()
-	pass := widget.NewPasswordEntry()
-	dialog.ShowForm("Log in to Discord", "Log in", "cancel",
-		[]*widget.FormItem{
-			{Text: "Email", Widget: email},
-			{Text: "Password", Widget: pass},
-		}, func(ok bool) {
-			if ok {
-				d.doLogin(email.Text, pass.Text, w, d.app.Preferences(), prefix, u)
-			}
-		}, w)
 }
 
 func (d *discord) send(ch *channel, text string) {
 	d.conn.SendText(discapi.ChannelID(ch.id), text)
 }
 
-func (d *discord) doLogin(email, pass string, w fyne.Window, p fyne.Preferences, prefix string, u *ui) {
+func (d *discord) doLogin(email, pass string, p fyne.Preferences, prefix string, u *ui) {
 	sess, err := session.Login(email, pass, "")
 	if err == nil {
 		p.SetString(prefix+prefDiscordTokenKey, sess.Token)
@@ -182,5 +181,5 @@ func (d *discord) doLogin(email, pass string, w fyne.Window, p fyne.Preferences,
 
 			p.SetString(prefix+prefDiscordTokenKey, sess.Token)
 			d.loadServers(sess, u)
-		}, w)
+		}, u.win)
 }

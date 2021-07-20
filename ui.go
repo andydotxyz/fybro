@@ -30,13 +30,13 @@ func (u *ui) appendMessages(list []*message) {
 	u.messageScroll.ScrollToBottom()
 }
 
-func (u *ui) makeUI() fyne.CanvasObject {
+func (u *ui) makeUI(w fyne.Window, a fyne.App) fyne.CanvasObject {
 	u.servers = widget.NewList(
 		func() int {
 			if u.data == nil {
-				return 0
+				return 1
 			}
-			return len(u.data.servers)
+			return len(u.data.servers) + 1
 		},
 		func() fyne.CanvasObject {
 			img := &canvas.Image{}
@@ -44,10 +44,18 @@ func (u *ui) makeUI() fyne.CanvasObject {
 			return img
 		},
 		func(id widget.ListItemID, o fyne.CanvasObject) {
-			o.(*canvas.Image).Resource = u.data.servers[id].icon()
+			if u.data == nil || id == len(u.data.servers) {
+				o.(*canvas.Image).Resource = theme.ContentAddIcon()
+			} else {
+				o.(*canvas.Image).Resource = u.data.servers[id].icon()
+			}
 			o.Refresh()
 		})
 	u.servers.OnSelected = func(id widget.ListItemID) {
+		if u.data == nil || id == len(u.data.servers) {
+			u.addLogin(w, a)
+			return
+		}
 		u.currentServer = u.data.servers[id]
 		u.channels.Unselect(0)
 		u.channels.Select(0)

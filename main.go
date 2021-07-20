@@ -24,7 +24,7 @@ func main() {
 	w := a.NewWindow(winTitle)
 
 	u := &ui{win: w}
-	w.SetContent(u.makeUI())
+	w.SetContent(u.makeUI(w, a))
 	w.Resize(fyne.NewSize(480, 320))
 	go u.runLogins(w, a)
 	w.ShowAndRun()
@@ -36,15 +36,7 @@ func main() {
 func (u *ui) runLogins(w fyne.Window, a fyne.App) {
 	count := a.Preferences().Int(prefServerCountKey)
 	if count == 0 {
-		prefix := fmt.Sprintf(prefServerPrefix, 0)
-		disc, err := connect("discord", a)
-		if err != nil {
-			dialog.ShowError(err, fyne.CurrentApp().Driver().AllWindows()[0])
-			return
-		}
-		disc.login(w, prefix, u)
-		a.Preferences().SetInt(prefServerCountKey, 1) // TODO handle actual server add
-		a.Preferences().SetString(prefix+prefServerTypeKey, "discord")
+		u.addLogin(w, a)
 	}
 	for i := 0; i < count; i++ {
 		prefPrefix := fmt.Sprintf(prefServerPrefix, i)
@@ -55,6 +47,6 @@ func (u *ui) runLogins(w fyne.Window, a fyne.App) {
 			dialog.ShowError(err, w)
 			continue
 		}
-		srv.login(w, prefPrefix, u)
+		srv.login(prefPrefix, u)
 	}
 }

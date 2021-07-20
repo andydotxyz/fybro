@@ -7,8 +7,9 @@ import (
 )
 
 type service interface {
+	configure(*ui) (fyne.CanvasObject, func(prefix string, a fyne.App))
 	disconnect()
-	login(w fyne.Window, prefix string, u *ui)
+	login(prefix string, u *ui)
 	send(*channel, string)
 }
 
