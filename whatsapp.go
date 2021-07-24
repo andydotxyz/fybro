@@ -37,7 +37,7 @@ func initWhatsApp(a fyne.App) service {
 }
 
 func (w *whatsApp) configure(u *ui) (fyne.CanvasObject, func(prefix string, a fyne.App)) {
-	w.conn = w.setupClient()
+	w.conn = w.setupClient(60)
 
 	return widget.NewLabel("Open WhatsApp on your phone and\nprepare to scan QR code"), func(prefix string, a fyne.App) {
 		qrChan := make(chan string)
@@ -75,7 +75,7 @@ func (w *whatsApp) disconnect() {
 func (w *whatsApp) login(prefix string, u *ui) {
 	w.ui = u
 	if w.conn == nil {
-		w.conn = w.setupClient()
+		w.conn = w.setupClient(5)
 
 		p := w.app.Preferences()
 		encBytes, _ := base64.StdEncoding.DecodeString(p.String(prefix + prefWhatsEncKeyKey))
@@ -88,7 +88,8 @@ func (w *whatsApp) login(prefix string, u *ui) {
 			ServerToken: p.String(prefix + prefWhatsServerTokenKey)}
 		_, err := w.conn.RestoreWithSession(load)
 		if err != nil {
-			log.Println("Failed tor recover WhatsApp session", err)
+			log.Println("Failed to recover WhatsApp session", err)
+			return
 		}
 	}
 
@@ -122,8 +123,8 @@ func (w *whatsApp) send(ch *channel, text string) {
 	w.ui.appendMessages([]*message{msg})
 }
 
-func (w *whatsApp) setupClient() *whatsapp.Conn {
-	wac, _ := whatsapp.NewConn(30 * time.Second)
+func (w *whatsApp) setupClient(secs int) *whatsapp.Conn {
+	wac, _ := whatsapp.NewConn(time.Duration(secs) * time.Second)
 	wac.SetClientVersion(2, 2121, 6)
 	_ = wac.SetClientName("Fibro Cross-service chat", "Fibro", "0.1")
 
