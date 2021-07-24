@@ -28,23 +28,23 @@ func newMessageCell(m *message) *messageCell {
 }
 
 func (m *messageCell) avatarResource() fyne.Resource {
-	if m.msg.avatar == "" {
+	if m.msg.user.avatarURL == "" {
 		return nil
 	}
 
 	resCacheLock.RLock()
-	ret, ok := resCache[m.msg.avatar]
+	ret, ok := resCache[m.msg.user.avatarURL]
 	resCacheLock.RUnlock()
 	if ok {
 		return ret
 	}
-	url, err := storage.ParseURI(m.msg.avatar)
+	url, err := storage.ParseURI(m.msg.user.avatarURL)
 	if err != nil || url == nil {
 		return nil
 	}
 	ret, _ = storage.LoadResourceFromURI(url)
 	resCacheLock.Lock()
-	resCache[m.msg.avatar] = ret
+	resCache[m.msg.user.avatarURL] = ret
 	resCacheLock.Unlock()
 	return ret
 }
@@ -98,7 +98,11 @@ func (m *messageRenderer) Objects() []fyne.CanvasObject {
 }
 
 func (m *messageRenderer) Refresh() {
-	m.top.SetText(m.m.msg.author)
+	if m.m.msg.user.name != "" {
+		m.top.SetText(m.m.msg.user.name)
+	} else {
+		m.top.SetText(m.m.msg.user.username)
+	}
 	m.main.SetText(m.m.msg.content)
 	go m.pic.SetResource(m.m.avatarResource())
 }

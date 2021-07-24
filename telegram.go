@@ -42,6 +42,25 @@ func (t *telegram) disconnect() {
 	_ = t.proto.Disconnect()
 }
 
+func (t *telegram) getUser(id int32) *user {
+	uid := strconv.Itoa(int(id))
+	if usr, found := t.server.users[uid]; found {
+		return usr
+	}
+
+	data, err := t.proto.UsersGetFullUsers(mtproto.TL_inputUser{User_id: id})
+	if err != nil {
+		fyne.LogError("Failed to download user info", err)
+		return nil
+	}
+
+	u := data.User.(mtproto.TL_user)
+	user := &user{username: u.Username, name: userDisplayName(u)}
+
+	t.server.users[uid] = user
+	return user
+}
+
 func (t *telegram) login(prefix string, u *ui) {
 	authFile, _ := storage.Child(t.app.Storage().RootURI(), prefix+"auth.token")
 	exists, _ := storage.Exists(authFile)
@@ -95,7 +114,7 @@ func (t *telegram) login(prefix string, u *ui) {
 					} else {
 						cid = m.To_id.(mtproto.TL_peerUser).User_id
 					}
-					msg := &message{author: strconv.Itoa(int(m.From_id)), content: m.Message}
+					msg := &message{content: m.Message, user: t.getUser(m.From_id)}
 					ch := findServerChan(t.server, strconv.Itoa(int(cid)))
 					ch.messages = append(ch.messages, msg)
 
@@ -187,7 +206,7 @@ func (t *telegram) loadServers(s *mtproto.MTProto, prefix string, u *ui) {
 
 		if len(srv.channels) == 0 {
 			id, _ := strconv.Atoi(chn.id)
-			chn.messages = u.loadMessages(s, id, false)
+			chn.messages = t.loadMessages(s, id, false)
 			if srv == u.currentServer {
 				u.setChannel(chn)
 			}
@@ -198,18 +217,20 @@ func (t *telegram) loadServers(s *mtproto.MTProto, prefix string, u *ui) {
 
 	// direct messages
 	ret, err = s.ContactsGetTopPeers(true, false, false, false, false, 0, 0, 0)
-	for _, c := range (*ret).(mtproto.TL_contacts_topPeers).Users {
-		chat := c.(mtproto.TL_user)
-		chn := &channel{name: chat.Phone, id: strconv.Itoa(int(chat.Id)), direct: true, server: srv}
+	if ret != nil {
+		for _, c := range (*ret).(mtproto.TL_contacts_topPeers).Users {
+			chat := c.(mtproto.TL_user)
+			chn := &channel{name: userDisplayName(chat), id: strconv.Itoa(int(chat.Id)), direct: true, server: srv}
 
-		if len(srv.channels) == 0 {
-			cid, _ := strconv.Atoi(chn.id)
-			chn.messages = u.loadMessages(s, cid, true)
-			if srv == u.currentServer {
-				u.setChannel(chn)
+			if len(srv.channels) == 0 {
+				cid, _ := strconv.Atoi(chn.id)
+				chn.messages = t.loadMessages(s, cid, true)
+				if srv == u.currentServer {
+					u.setChannel(chn)
+				}
 			}
+			srv.channels = append(srv.channels, chn)
 		}
-		srv.channels = append(srv.channels, chn)
 	}
 	u.channels.Refresh()
 
@@ -218,11 +239,11 @@ func (t *telegram) loadServers(s *mtproto.MTProto, prefix string, u *ui) {
 			continue // we did this one above
 		}
 		id, _ := strconv.Atoi(c.id)
-		c.messages = u.loadMessages(s, id, c.direct)
+		c.messages = t.loadMessages(s, id, c.direct)
 	}
 }
 
-func (u *ui) loadMessages(s *mtproto.MTProto, id int, direct bool) []*message {
+func (t *telegram) loadMessages(s *mtproto.MTProto, id int, direct bool) []*message {
 	var nid mtproto.TL
 	if direct {
 		nid = mtproto.TL_inputPeerUser{User_id: int32(id)}
@@ -239,8 +260,7 @@ func (u *ui) loadMessages(s *mtproto.MTProto, id int, direct bool) []*message {
 	ms := (*ret).(mtproto.TL_messages_messagesSlice).Messages
 	for i := len(ms) - 1; i >= 0; i-- { // newest message is first in response
 		m := ms[i].(mtproto.TL_message)
-
-		msg := &message{author: strconv.Itoa(int(m.From_id)), content: m.Message}
+		msg := &message{content: m.Message, user: t.getUser(m.From_id)}
 		list = append(list, msg)
 	}
 
@@ -258,4 +278,14 @@ func (t *telegram) send(ch *channel, text string) {
 
 	t.proto.MessagesSendMessage(true, false, false, true,
 		nid, 0, text, rand.Int63(), mtproto.TL_null{}, nil)
+}
+
+func userDisplayName(u mtproto.TL_user) string {
+	if u.First_name != "" || u.Last_name != "" {
+		return u.First_name + " " + u.Last_name
+	}
+	if u.Username != "" {
+		return u.Username
+	}
+	return u.Phone
 }

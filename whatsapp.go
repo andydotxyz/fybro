@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"log"
 	"strings"
+	"sync"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -118,7 +119,7 @@ func (w *whatsApp) send(ch *channel, text string) {
 		return
 	}
 
-	msg := &message{author: w.conn.Info.Wid, content: text}
+	msg := &message{content: text, user: w.getUser(w.conn.Info.Wid)}
 	ch.messages = append(ch.messages, msg)
 	w.ui.appendMessages([]*message{msg})
 }
@@ -142,7 +143,7 @@ func (w *whatsApp) HandleTextMessage(m whatsapp.TextMessage) {
 	} else if m.Info.Source.Participant != nil {
 		from = *m.Info.Source.Participant
 	}
-	msg := &message{content: m.Text, author: from}
+	msg := &message{content: m.Text, user: w.getUser(from)}
 	var ch *channel
 	for _, c := range w.server.channels {
 		if c.id == m.Info.RemoteJid {
@@ -151,15 +152,19 @@ func (w *whatsApp) HandleTextMessage(m whatsapp.TextMessage) {
 		}
 	}
 	if ch == nil {
-		ch = &channel{id: m.Info.RemoteJid, name: m.Info.RemoteJid, server: w.server}
+		ch = &channel{id: m.Info.RemoteJid, server: w.server}
 		w.server.channels = append(w.server.channels, ch)
 
 		data, err := w.conn.GetGroupMetaData(m.Info.RemoteJid)
 		if err == nil {
 			vals := make(map[string]interface{})
 			d := json.NewDecoder(strings.NewReader(<-data))
-			d.Decode(&vals)
-			ch.name = vals["subject"].(string)
+			_ = d.Decode(&vals)
+			if name, ok := vals["subject"].(string); ok {
+				ch.name = name
+			} else {
+				ch.name = w.getUser(m.Info.RemoteJid).name
+			}
 		} else {
 			log.Println("get channel title error", err)
 		}
@@ -169,4 +174,37 @@ func (w *whatsApp) HandleTextMessage(m whatsapp.TextMessage) {
 	if ch == w.ui.currentChannel {
 		w.ui.appendMessages([]*message{msg})
 	}
+}
+
+var userLock sync.RWMutex
+
+func (w *whatsApp) getUser(id string) *user {
+	userLock.RLock()
+	usr, found := w.server.users[id]
+	userLock.RUnlock()
+	if found {
+		return usr
+	}
+
+	user := &user{name: "someone",
+		username: id}
+
+	if contact, ok := w.conn.Store.Contacts[id]; ok {
+		user.name = contact.Name
+		user.username = contact.Short
+	}
+
+	data, err := w.conn.GetProfilePicThumb(id)
+	if err == nil {
+		vals := make(map[string]interface{})
+		d := json.NewDecoder(strings.NewReader(<-data))
+		_ = d.Decode(&vals)
+		if url, ok := vals["eurl"].(string); ok {
+			user.avatarURL = url
+		}
+	}
+	userLock.Lock()
+	w.server.users[id] = user
+	userLock.Unlock()
+	return user
 }

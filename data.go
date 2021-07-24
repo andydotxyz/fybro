@@ -14,6 +14,7 @@ type server struct {
 	iconResource  fyne.Resource
 	channels      []*channel
 	service       service
+	users         map[string]*user
 }
 
 func (s *server) icon() fyne.Resource {
@@ -40,8 +41,12 @@ type channel struct {
 }
 
 type message struct {
-	content, author string
-	avatar          string
+	content string
+	user    *user
+}
+
+type user struct {
+	name, username, avatarURL string
 }
 
 func findChan(d *appData, sID, cID string) *channel {

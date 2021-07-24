@@ -13,8 +13,8 @@ Feel free to play, but don't expect it to do much!
 | Server | Read | Send | Groups | Contacts |
 | ------ | ---- | ---- | ------ | -------- |
 | **Discord** | ✔ | ✔ | ✔ | ✔ | 
-| **Telegram** | ✔ | ✔ | ✔ | ✘ |
-| **WhatsApp** | ✔ | ✔ | ✔ | ✘ |
+| **Telegram** | ✔ | ✔ | ✔ | ✔ |
+| **WhatsApp** | ✔ | ✔ | ✔ | ✔ |
 
 *Urgent*
 

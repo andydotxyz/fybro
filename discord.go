@@ -83,8 +83,10 @@ func (d *discord) loadRecentMessages(id discapi.ChannelID) []*message {
 	var list []*message
 	for i := len(ms) - 1; i >= 0; i-- { // newest message is first in response
 		m := ms[i]
-		msg := &message{author: m.Author.Username, content: m.Content,
-			avatar: m.Author.AvatarURL()}
+		msg := &message{content: m.Content, user: &user{
+			name:      m.Author.Username,
+			avatarURL: m.Author.AvatarURL()},
+		}
 		list = append(list, msg)
 	}
 
@@ -127,8 +129,10 @@ func (d *discord) loadServers(s *session.Session, u *ui) {
 			return
 		}
 
-		msg := &message{author: ev.Author.Username, content: ev.Content,
-			avatar: ev.Author.AvatarURL()}
+		msg := &message{content: ev.Content, user: &user{
+			name:      ev.Author.Username,
+			avatarURL: ev.Author.AvatarURL()},
+		}
 		ch.messages = append(ch.messages, msg)
 		if ch == u.currentChannel {
 			u.appendMessages([]*message{msg})
