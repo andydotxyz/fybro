@@ -50,7 +50,7 @@ func (d *discord) loadChannels(u *ui) {
 				continue // ignore voice and groupings for now
 			}
 
-			chn := &channel{id: strconv.Itoa(int(c.ID)), name: c.Name, server: s}
+			chn := &channel{id: strconv.Itoa(int(c.ID)), name: "#" + c.Name, server: s}
 			if len(s.channels) == 0 {
 				chn.messages = d.loadRecentMessages(c.ID)
 				if s == u.currentServer {

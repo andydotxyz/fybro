@@ -3,7 +3,9 @@ package main
 import (
 	"bytes"
 	"encoding/base64"
+	"encoding/json"
 	"log"
+	"strings"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -35,10 +37,7 @@ func initWhatsApp(a fyne.App) service {
 }
 
 func (w *whatsApp) configure(u *ui) (fyne.CanvasObject, func(prefix string, a fyne.App)) {
-	wac, _ := whatsapp.NewConn(30 * time.Second)
-	wac.SetClientVersion(2, 2121, 6)
-	wac.SetClientName("Fibro Cross-service chat", "Fibro", "0.1")
-	w.conn = wac
+	w.conn = w.setupClient()
 
 	return widget.NewLabel("Open WhatsApp on your phone and\nprepare to scan QR code"), func(prefix string, a fyne.App) {
 		qrChan := make(chan string)
@@ -51,7 +50,7 @@ func (w *whatsApp) configure(u *ui) (fyne.CanvasObject, func(prefix string, a fy
 			qrScreen.Show()
 		}()
 
-		sess, err := wac.Login(qrChan)
+		sess, err := w.conn.Login(qrChan)
 		if err != nil {
 			dialog.ShowError(err, u.win)
 			return
@@ -76,10 +75,7 @@ func (w *whatsApp) disconnect() {
 func (w *whatsApp) login(prefix string, u *ui) {
 	w.ui = u
 	if w.conn == nil {
-		wac, _ := whatsapp.NewConn(10 * time.Second)
-		wac.SetClientVersion(2, 2121, 6)
-		wac.SetClientName("Fibro Cross-service chat", "Fibro", "0.1")
-		w.conn = wac
+		w.conn = w.setupClient()
 
 		p := w.app.Preferences()
 		encBytes, _ := base64.StdEncoding.DecodeString(p.String(prefix + prefWhatsEncKeyKey))
@@ -90,7 +86,7 @@ func (w *whatsApp) login(prefix string, u *ui) {
 			ClientId:    p.String(prefix + prefWhatsClientIDKey),
 			ClientToken: p.String(prefix + prefWhatsClientTokenKey),
 			ServerToken: p.String(prefix + prefWhatsServerTokenKey)}
-		_, err := wac.RestoreWithSession(load)
+		_, err := w.conn.RestoreWithSession(load)
 		if err != nil {
 			log.Println("Failed tor recover WhatsApp session", err)
 		}
@@ -125,6 +121,14 @@ func (w *whatsApp) send(ch *channel, text string) {
 	w.ui.appendMessages([]*message{msg})
 }
 
+func (w *whatsApp) setupClient() *whatsapp.Conn {
+	wac, _ := whatsapp.NewConn(30 * time.Second)
+	wac.SetClientVersion(2, 2121, 6)
+	_ = wac.SetClientName("Fibro Cross-service chat", "Fibro", "0.1")
+
+	return wac
+}
+
 func (w *whatsApp) HandleError(err error) {
 	log.Println("WhatsApp error", err)
 }
@@ -147,6 +151,16 @@ func (w *whatsApp) HandleTextMessage(m whatsapp.TextMessage) {
 	if ch == nil {
 		ch = &channel{id: m.Info.RemoteJid, name: m.Info.RemoteJid, server: w.server}
 		w.server.channels = append(w.server.channels, ch)
+
+		data, err := w.conn.GetGroupMetaData(m.Info.RemoteJid)
+		if err == nil {
+			vals := make(map[string]interface{})
+			d := json.NewDecoder(strings.NewReader(<-data))
+			d.Decode(&vals)
+			ch.name = vals["subject"].(string)
+		} else {
+			log.Println("get channel title error", err)
+		}
 	}
 	ch.messages = append(ch.messages, msg)
 

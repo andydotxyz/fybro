@@ -72,7 +72,7 @@ func (u *ui) makeUI(w fyne.Window, a fyne.App) fyne.CanvasObject {
 			return widget.NewLabel("")
 		},
 		func(id widget.ListItemID, o fyne.CanvasObject) {
-			o.(*widget.Label).SetText("# " + u.currentServer.channels[id].name)
+			o.(*widget.Label).SetText(u.currentServer.channels[id].name)
 		})
 	u.channels.OnSelected = func(id widget.ListItemID) {
 		u.setChannel(u.currentServer.channels[id])
