@@ -11,18 +11,23 @@ type appData struct {
 type server struct {
 	id            string
 	name, iconURL string
+	iconResource  fyne.Resource
 	channels      []*channel
 	service       service
 }
 
 func (s *server) icon() fyne.Resource {
-	// TODO cache this resource
+	if s.iconResource != nil {
+		return s.iconResource
+	}
+
 	icon, err := fyne.LoadResourceFromURLString(s.iconURL)
 	if err != nil {
 		fyne.LogError("Failed to read icon "+s.iconURL, err)
 		return nil
 	}
 
+	s.iconResource = icon
 	return icon
 }
 

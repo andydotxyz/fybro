@@ -92,7 +92,8 @@ func (w *whatsApp) login(prefix string, u *ui) {
 		}
 	}
 
-	srv := &server{service: w, name: "WhatsApp", iconURL: "https://www.freepngimg.com/thumb/whatsapp/77102-whatsapp-computer-call-telephone-icons-png-image-high-quality.png"}
+	srv := &server{service: w, name: "WhatsApp", iconResource: resourceWhatsappPng}
+	srv.users = make(map[string]*user)
 	w.server = srv
 
 	if u.data == nil {

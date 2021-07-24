@@ -154,7 +154,8 @@ func (t *telegram) login(prefix string, u *ui) {
 }
 
 func (t *telegram) loadServers(s *mtproto.MTProto, prefix string, u *ui) {
-	srv := &server{service: t, name: "Telegram", iconURL: "https://osx.telegram.org/updates/site/logo.png"}
+	srv := &server{service: t, name: "Telegram", iconResource: resourceTelegramPng}
+	srv.users = make(map[string]*user)
 	t.server = srv
 
 	if u.data == nil {

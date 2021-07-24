@@ -1,4 +1,6 @@
 //go:generate fyne bundle -o bundled.go Icon.png
+//go:generate fyne bundle -o bundled.go -append img/whatsapp.png
+//go:generate fyne bundle -o bundled.go -append img/telegram.png
 
 package main
 
