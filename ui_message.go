@@ -55,10 +55,12 @@ func (m *messageCell) setMessage(new *message) {
 }
 
 func (m *messageCell) CreateRenderer() fyne.WidgetRenderer {
+	name := widget.NewLabelWithStyle("", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+	name.Wrapping = fyne.TextTruncate
 	body := widget.NewLabel("")
 	body.Wrapping = fyne.TextWrapWord
 	return &messageRenderer{m: m,
-		top:  widget.NewLabelWithStyle("", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+		top:  name,
 		main: body, pic: widget.NewIcon(nil), sep: widget.NewSeparator()}
 }
 
