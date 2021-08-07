@@ -1,4 +1,4 @@
-module github.com/andydotxyz/fibro
+module github.com/andydotxyz/fybro
 
 go 1.15
 

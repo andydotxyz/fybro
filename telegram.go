@@ -56,6 +56,17 @@ func (t *telegram) getUser(id int32) *user {
 
 	u := data.User.(mtproto.TL_user)
 	user := &user{username: u.Username, name: userDisplayName(u)}
+	//if u.Photo.(mtproto.TL_userProfilePhoto).Photo_small != nil {
+	//	time.Sleep(time.Second*10)
+	//	p := u.Photo.(mtproto.TL_userProfilePhoto).Photo_small.(mtproto.TL_fileLocation)
+	//	l := &mtproto.TL_inputFileLocation{
+	//		Secret: p.Secret,
+	//		Local_id: p.Local_id,
+	//		Volume_id: p.Volume_id,
+	//	}
+	//	f, err := t.proto.UploadGetFile(l, 0)
+	//	log.Println("F", f, err)
+	//}
 
 	t.server.users[uid] = user
 	return user

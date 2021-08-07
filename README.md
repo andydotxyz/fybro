@@ -1,4 +1,4 @@
-# Fibro
+# Fybro
 
 Really early days proof of concept for a cross-platform multi-server chat.
 Feel free to play, but don't expect it to do much!

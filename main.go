@@ -17,11 +17,11 @@ const (
 	prefServerPrefix   = "server.%d."
 	prefServerTypeKey  = "type"
 
-	winTitle = "Fibro"
+	winTitle = "Fybro"
 )
 
 func main() {
-	a := app.NewWithID("xyz.andy.fibro")
+	a := app.NewWithID("xyz.andy.fybro")
 	a.SetIcon(resourceIconPng)
 	w := a.NewWindow(winTitle)
 

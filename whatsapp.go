@@ -127,7 +127,7 @@ func (w *whatsApp) send(ch *channel, text string) {
 func (w *whatsApp) setupClient(secs int) *whatsapp.Conn {
 	wac, _ := whatsapp.NewConn(time.Duration(secs) * time.Second)
 	wac.SetClientVersion(2, 2121, 6)
-	_ = wac.SetClientName("Fibro Cross-service chat", "Fibro", "0.1")
+	_ = wac.SetClientName("Fybro Cross-service chat", "Fybro", "0.1")
 
 	return wac
 }
