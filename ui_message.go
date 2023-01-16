@@ -57,7 +57,7 @@ func (m *messageCell) setMessage(new *message) {
 func (m *messageCell) CreateRenderer() fyne.WidgetRenderer {
 	name := widget.NewLabelWithStyle("", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
 	name.Wrapping = fyne.TextTruncate
-	body := widget.NewLabel("")
+	body := widget.NewRichText()
 	body.Wrapping = fyne.TextWrapWord
 	return &messageRenderer{m: m,
 		top:  name,
@@ -65,10 +65,11 @@ func (m *messageCell) CreateRenderer() fyne.WidgetRenderer {
 }
 
 type messageRenderer struct {
-	m         *messageCell
-	top, main *widget.Label
-	pic       *widget.Icon
-	sep       *widget.Separator
+	m    *messageCell
+	top  *widget.Label
+	main *widget.RichText
+	pic  *widget.Icon
+	sep  *widget.Separator
 }
 
 func (m *messageRenderer) Destroy() {
@@ -105,6 +106,6 @@ func (m *messageRenderer) Refresh() {
 	} else {
 		m.top.SetText(m.m.msg.user.username)
 	}
-	m.main.SetText(m.m.msg.content)
+	m.main.ParseMarkdown(m.m.msg.content)
 	go m.pic.SetResource(m.m.avatarResource())
 }
