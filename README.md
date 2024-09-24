@@ -9,6 +9,7 @@ Feel free to play, but don't expect it to do much!
 - [x] Switch servers and channels
 - [x] Load recent and new messages
 - [x] Send messages
+- [x] Emojis
 
 | Server | Read | Send | Groups | Contacts |
 | ------ | ---- | ---- | ------ | -------- |
@@ -22,8 +23,7 @@ Feel free to play, but don't expect it to do much!
 
 *Planned*
 
-- [ ] Rich text content (requires Fyne 2.1)
-- [ ] Emojis
+- [ ] Rich text content
 - [ ] Slack service
 - [ ] Matrix service
 - [ ] IRC service
