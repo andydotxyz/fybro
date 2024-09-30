@@ -1,26 +1,33 @@
 package main
 
 import (
-	"math/rand"
+	"context"
+	"log"
+	"path/filepath"
 	"strconv"
-	"strings"
-	"time"
+	"sync"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/dialog"
-	"fyne.io/fyne/v2/storage"
 	"fyne.io/fyne/v2/widget"
-
-	"github.com/bobrovde/mtproto"
+	"github.com/celestix/gotgproto"
+	"github.com/celestix/gotgproto/ext"
+	"github.com/celestix/gotgproto/sessionMaker"
+	"github.com/glebarez/sqlite"
+	msg2 "github.com/gotd/td/telegram/message"
+	"github.com/gotd/td/tg"
 )
 
 const prefTelegramTelKey = "auth.tel"
 
 type telegram struct {
-	app    fyne.App
-	ip     string
-	proto  *mtproto.MTProto
+	app     fyne.App
+	ip      string
+	proto   *gotgproto.Client
+	context *ext.Context
+
 	server *server
+	ui     *ui
 }
 
 func initTelegram(a fyne.App) service {
@@ -28,6 +35,7 @@ func initTelegram(a fyne.App) service {
 }
 
 func (t *telegram) configure(u *ui) (fyne.CanvasObject, func(prefix string, a fyne.App)) {
+	t.ui = u
 	tel := widget.NewEntry()
 	return widget.NewForm(
 			&widget.FormItem{Text: "Telephone", Widget: tel}),
@@ -39,22 +47,22 @@ func (t *telegram) configure(u *ui) (fyne.CanvasObject, func(prefix string, a fy
 }
 
 func (t *telegram) disconnect() {
-	_ = t.proto.Disconnect()
+	t.proto.Stop()
 }
 
-func (t *telegram) getUser(id int32) *user {
+func (t *telegram) getUser(id int64) *user {
 	uid := strconv.Itoa(int(id))
 	if usr, found := t.server.users[uid]; found {
 		return usr
 	}
 
-	data, err := t.proto.UsersGetFullUsers(mtproto.TL_inputUser{User_id: id})
-	if err != nil {
+	data, err := t.context.Raw.UsersGetUsers(t.context, []tg.InputUserClass{&tg.InputUser{UserID: id}})
+	if err != nil || len(data) == 0 {
 		fyne.LogError("Failed to download user info", err)
 		return nil
 	}
 
-	u := data.User.(mtproto.TL_user)
+	u, _ := data[0].AsNotEmpty()
 	user := &user{username: u.Username, name: userDisplayName(u)}
 	//if u.Photo.(mtproto.TL_userProfilePhoto).Photo_small != nil {
 	//	time.Sleep(time.Second*10)
@@ -73,117 +81,39 @@ func (t *telegram) getUser(id int32) *user {
 }
 
 func (t *telegram) login(prefix string, u *ui) {
-	authFile, _ := storage.Child(t.app.Storage().RootURI(), prefix+"auth.token")
-	exists, _ := storage.Exists(authFile)
-	m, err := mtproto.NewMTProto(telegramAppID, telegramAppHash,
-		mtproto.WithServer(t.ip, false),
-		mtproto.WithAuthFile(authFile.Path(), !exists))
-	if err != nil {
-		fyne.LogError("Connect failed", err)
-		return
-	}
-	err = m.Connect()
-	t.proto = m
-	if err != nil {
-		fyne.LogError("Connect failed", err)
-		return
-	}
-
-	ret, err := m.UpdatesGetState()
-	if err != nil {
-		fyne.LogError("Failed to init updates", err)
-	} else {
-		go func() {
-			pts := (*ret).(mtproto.TL_updates_state).Pts
-			qts := (*ret).(mtproto.TL_updates_state).Qts
-			date := int32(time.Now().Unix())
-			for {
-				time.Sleep(time.Second * 10)
-
-				ret, err := m.UpdatesGetState()
-				if err != nil {
-					fyne.LogError("update request failed", err)
-					continue
-				}
-
-				data := (*ret).(mtproto.TL_updates_state)
-				if pts == data.Pts {
-					continue
-				}
-
-				items, err := m.UpdatesGetDifference(pts, 0, date, qts)
-				if err != nil {
-					fyne.LogError("difference request failed", err)
-					continue
-				}
-				for _, item := range (*items).(mtproto.TL_updates_difference).New_messages {
-					m := item.(mtproto.TL_message)
-
-					cid := int32(0)
-					if tl, ok := m.To_id.(mtproto.TL_peerChat); ok {
-						cid = tl.Chat_id
-					} else {
-						cid = m.To_id.(mtproto.TL_peerUser).User_id
-					}
-					msg := &message{content: m.Message, user: t.getUser(m.From_id)}
-					ch := findServerChan(t.server, strconv.Itoa(int(cid)))
-					ch.messages = append(ch.messages, msg)
-
-					if ch == u.currentChannel {
-						u.messages.Objects = nil
-						u.appendMessages(u.currentChannel.messages)
-					}
-				}
-				pts = data.Pts
-				qts = data.Qts
-				date = int32(time.Now().Unix())
-			}
-		}()
-	}
-	if exists {
-		t.loadServers(m, prefix, u)
-		return
-	}
-
+	t.ui = u
 	p := t.app.Preferences()
 	num := p.String(prefix + prefTelegramTelKey)
-	c, err := m.AuthSendCode(num)
-	if err != nil {
-		if status, ok := err.(mtproto.TL_rpc_error); ok {
-			if status.Error_message == "AUTH_RESTART" {
-				t.login(prefix, u)
-			} else if strings.ContainsAny(status.Error_message, "PHONE_MIGRATE_") {
-				id, _ := strconv.Atoi(status.Error_message[14:])
-				storage.Delete(authFile)
 
-				t.ip, _ = m.GetDCIP(int32(id))
-				t.login(prefix, u)
-			} else {
-				fyne.LogError("Unknown protocol error", err)
-			}
-		} else {
-			fyne.LogError("Unknown error", err)
-		}
+	path := filepath.Join(fyne.CurrentApp().Storage().RootURI().Path(), "fybro-telegram.sqlite")
+	client, err := gotgproto.NewClient(
+		telegramAppID,
+		telegramAppHash,
+		gotgproto.ClientTypePhone(num),
+		&gotgproto.ClientOpts{
+			AuthConversator: &inputGetter{num: num},
+			Session:         sessionMaker.SqlSession(sqlite.Open(path)),
+			InMemory:        false,
+		},
+	)
+
+	if err != nil {
+		fyne.LogError("Connect failed", err)
 		return
 	}
-	hash := c.Phone_code_hash
-	conf := widget.NewEntry()
-	dialog.ShowForm("Telegram code for "+num, "Log in", "cancel",
-		[]*widget.FormItem{
-			{Text: "Auth Code", Widget: conf},
-		}, func(ok bool) {
-			code := conf.Text
-			_, err := m.AuthSignIn(num, code, hash)
-			if err != nil {
-				fyne.LogError("Failed to log in to telegram", err)
-				return
-			}
 
-			t.loadServers(m, prefix, u)
-		}, u.win)
+	t.proto = client
+	t.context = client.CreateContext()
+
+	client.Dispatcher.AddHandler(&updateHandler{t: t, u: u})
+	go func() {
+		client.Idle()
+	}()
+
+	t.loadServers(t.context, prefix, u)
 }
 
-func (t *telegram) loadServers(s *mtproto.MTProto, prefix string, u *ui) {
+func (t *telegram) loadServers(s *ext.Context, prefix string, u *ui) {
 	srv := &server{service: t, name: "Telegram", iconResource: resourceTelegramPng}
 	srv.users = make(map[string]*user)
 	t.server = srv
@@ -199,25 +129,17 @@ func (t *telegram) loadServers(s *mtproto.MTProto, prefix string, u *ui) {
 	u.servers.Refresh()
 
 	// try group chats
-	ret, err := s.ChatsGetAllChats([]int32{})
+	ret, err := s.Raw.MessagesGetDialogs(s, &tg.MessagesGetDialogsRequest{OffsetPeer: &tg.InputPeerEmpty{}})
 	if err != nil {
-		if status, ok := err.(mtproto.TL_rpc_error); ok {
-			strings.ContainsAny(status.Error_message, "AUTH")
-			authFile, _ := storage.Child(t.app.Storage().RootURI(), prefix+"auth.token")
-			_ = storage.Delete(authFile)
-			t.login(prefix, u)
-			return
-		} else {
-			fyne.LogError("Unknown protocol error", err)
-		}
+		fyne.LogError("Unknown protocol error", err)
 	}
-	for _, c := range (*ret).(mtproto.TL_messages_chats).Chats {
-		chat := c.(mtproto.TL_chat)
-		chn := &channel{name: chat.Title, id: strconv.Itoa(int(chat.Id)), direct: false, server: srv}
+	for _, c := range ret.(*tg.MessagesDialogsSlice).Chats {
+		chat := c.(*tg.Chat)
+		chn := &channel{name: chat.Title, id: strconv.Itoa(int(chat.ID)), direct: false, server: srv}
 
 		if len(srv.channels) == 0 {
 			id, _ := strconv.Atoi(chn.id)
-			chn.messages = t.loadMessages(s, id, false)
+			chn.messages = t.loadMessages(s, int64(id), false)
 			if srv == u.currentServer {
 				u.setChannel(chn)
 			}
@@ -227,15 +149,15 @@ func (t *telegram) loadServers(s *mtproto.MTProto, prefix string, u *ui) {
 	u.channels.Refresh()
 
 	// direct messages
-	ret, err = s.ContactsGetTopPeers(true, false, false, false, false, 0, 0, 0)
-	if ret != nil {
-		for _, c := range (*ret).(mtproto.TL_contacts_topPeers).Users {
-			chat := c.(mtproto.TL_user)
-			chn := &channel{name: userDisplayName(chat), id: strconv.Itoa(int(chat.Id)), direct: true, server: srv}
+	contacts, err := s.Raw.ContactsGetTopPeers(s, &tg.ContactsGetTopPeersRequest{Correspondents: true})
+	if contacts != nil {
+		for _, c := range contacts.(*tg.ContactsTopPeers).Users {
+			chat, _ := c.AsNotEmpty()
+			chn := &channel{name: userDisplayName(chat), id: strconv.Itoa(int(chat.ID)), direct: true, server: srv}
 
 			if len(srv.channels) == 0 {
 				cid, _ := strconv.Atoi(chn.id)
-				chn.messages = t.loadMessages(s, cid, true)
+				chn.messages = t.loadMessages(s, int64(cid), true)
 				if srv == u.currentServer {
 					u.setChannel(chn)
 				}
@@ -250,28 +172,39 @@ func (t *telegram) loadServers(s *mtproto.MTProto, prefix string, u *ui) {
 			continue // we did this one above
 		}
 		id, _ := strconv.Atoi(c.id)
-		c.messages = t.loadMessages(s, id, c.direct)
+		c.messages = t.loadMessages(s, int64(id), c.direct)
 	}
 }
 
-func (t *telegram) loadMessages(s *mtproto.MTProto, id int, direct bool) []*message {
-	var nid mtproto.TL
+func (t *telegram) loadMessages(s *ext.Context, id int64, direct bool) []*message {
+	var nid tg.InputPeerClass
 	if direct {
-		nid = mtproto.TL_inputPeerUser{User_id: int32(id)}
+		nid = &tg.InputPeerUser{UserID: id}
 	} else {
-		nid = mtproto.TL_inputPeerChat{Chat_id: int32(id)}
+		nid = &tg.InputPeerChat{ChatID: id}
 	}
-	ret, err := s.MessagesGetHistory(nid, 0, 0, 0, 15, 6500000, 0)
+	ret, err := s.Raw.MessagesGetHistory(s, &tg.MessagesGetHistoryRequest{Peer: nid})
+	//	ret, err := s.MessagesGetHistory(nid, 0, 0, 0, 15, 6500000, 0)
 	if err != nil {
 		fyne.LogError("Unknown message download error", err)
 		return nil
 	}
 
 	var list []*message
-	ms := (*ret).(mtproto.TL_messages_messagesSlice).Messages
+	ms := ret.(*tg.MessagesMessagesSlice).Messages
 	for i := len(ms) - 1; i >= 0; i-- { // newest message is first in response
-		m := ms[i].(mtproto.TL_message)
-		msg := &message{content: m.Message, user: t.getUser(m.From_id)}
+		data, ok := ms[i].AsNotEmpty()
+		if !ok {
+			log.Println("Could not parse message")
+			continue
+		}
+
+		m := data.(*tg.Message)
+		from := id
+		if m.FromID != nil {
+			from = m.FromID.(*tg.PeerUser).UserID
+		}
+		msg := &message{content: m.Message, user: t.getUser(from)}
 		list = append(list, msg)
 	}
 
@@ -280,23 +213,122 @@ func (t *telegram) loadMessages(s *mtproto.MTProto, id int, direct bool) []*mess
 
 func (t *telegram) send(ch *channel, text string) {
 	id, _ := strconv.Atoi(ch.id)
-	var nid mtproto.TL
+	send := msg2.NewSender(t.proto.API())
+	var builder *msg2.RequestBuilder
+
 	if ch.direct {
-		nid = mtproto.TL_inputPeerUser{User_id: int32(id)}
+		builder = send.To(&tg.InputPeerUser{UserID: int64(id)})
 	} else {
-		nid = mtproto.TL_inputPeerChat{Chat_id: int32(id)}
+		builder = send.To(&tg.InputPeerChat{ChatID: int64(id)})
 	}
 
-	t.proto.MessagesSendMessage(true, false, false, true,
-		nid, 0, text, rand.Int63(), mtproto.TL_null{}, nil)
+	_, err := builder.Text(context.Background(), text)
+	if err != nil {
+		fyne.LogError("Failed to send message", err)
+		return
+	}
+
+	msg := &message{content: text, user: t.getUser(t.context.Self.ID)}
+	ch.messages = append(ch.messages, msg)
+	t.ui.messages.Objects = nil
+	t.ui.appendMessages(ch.messages)
 }
 
-func userDisplayName(u mtproto.TL_user) string {
-	if u.First_name != "" || u.Last_name != "" {
-		return u.First_name + " " + u.Last_name
+func userDisplayName(u *tg.User) string {
+	if u.FirstName != "" || u.LastName != "" {
+		return u.FirstName + " " + u.LastName
 	}
 	if u.Username != "" {
 		return u.Username
 	}
 	return u.Phone
+}
+
+type inputGetter struct {
+	num string
+}
+
+func (i *inputGetter) AskPhoneNumber() (string, error) {
+	return i.num, nil
+}
+
+func (i *inputGetter) AskCode() (string, error) {
+	w := fyne.CurrentApp().Driver().AllWindows()[0]
+	wg := sync.WaitGroup{}
+
+	conf := widget.NewEntry()
+	dialog.ShowForm("Telegram code for "+i.num, "Log in", "cancel",
+		[]*widget.FormItem{
+			{Text: "Auth Code", Widget: conf},
+		}, func(ok bool) {
+			wg.Done()
+		}, w)
+	wg.Add(1)
+
+	wg.Wait()
+	return conf.Text, nil
+}
+
+func (i *inputGetter) AskPassword() (string, error) {
+	w := fyne.CurrentApp().Driver().AllWindows()[0]
+	wg := sync.WaitGroup{}
+
+	conf := widget.NewPasswordEntry()
+	dialog.ShowForm("Telegram password for "+i.num, "Log in", "cancel",
+		[]*widget.FormItem{
+			{Text: "Password", Widget: conf},
+		}, func(ok bool) {
+			wg.Done()
+		}, w)
+	wg.Add(1)
+
+	wg.Wait()
+	return conf.Text, nil
+}
+
+func (i *inputGetter) AuthStatus(gotgproto.AuthStatus) {
+}
+
+type updateHandler struct {
+	t *telegram
+	u *ui
+}
+
+func (u *updateHandler) CheckUpdate(_ *ext.Context, up *ext.Update) error {
+	switch t := up.UpdateClass.(type) {
+	case *tg.UpdateNewMessage:
+		m := up.EffectiveMessage
+		from := int64(0)
+		if m.FromID != nil {
+			from = m.FromID.(*tg.PeerUser).UserID
+		} else {
+			log.Println("unknown from")
+		}
+		msg := &message{content: m.Message.Message, user: u.t.getUser(from)}
+
+		cid := int64(0)
+		if u, ok := m.PeerID.(*tg.PeerUser); ok {
+			cid = u.UserID
+		} else if c, ok := m.PeerID.(*tg.PeerChat); ok {
+			cid = c.ChatID
+		} else {
+			log.Println("Unknown type", m.PeerID)
+		}
+
+		ch := findServerChan(u.t.server, strconv.Itoa(int(cid)))
+		ch.messages = append(ch.messages, msg)
+
+		if ch == u.u.currentChannel {
+			u.u.messages.Objects = nil
+			u.u.appendMessages(u.u.currentChannel.messages)
+		}
+	case *tg.UpdateEditMessage:
+		log.Println("TODO handle edited message")
+	case *tg.UpdateUserStatus, *tg.UpdateUserTyping, *tg.UpdateReadHistoryInbox, *tg.UpdateReadHistoryOutbox:
+		log.Println("ignoring typing/read status")
+	default:
+		log.Println("Unknown update", t)
+	}
+
+	return nil
 }

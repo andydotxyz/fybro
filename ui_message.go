@@ -28,7 +28,7 @@ func newMessageCell(m *message) *messageCell {
 }
 
 func (m *messageCell) avatarResource() fyne.Resource {
-	if m.msg.user.avatarURL == "" {
+	if m.msg.user == nil || m.msg.user.avatarURL == "" {
 		return nil
 	}
 
@@ -101,10 +101,14 @@ func (m *messageRenderer) Objects() []fyne.CanvasObject {
 }
 
 func (m *messageRenderer) Refresh() {
-	if m.m.msg.user.name != "" {
-		m.top.SetText(m.m.msg.user.name)
+	if m.m.msg.user == nil {
+		m.top.SetText("(Unknown)")
 	} else {
-		m.top.SetText(m.m.msg.user.username)
+		if m.m.msg.user.name != "" {
+			m.top.SetText(m.m.msg.user.name)
+		} else {
+			m.top.SetText(m.m.msg.user.username)
+		}
 	}
 	m.main.ParseMarkdown(m.m.msg.content)
 	go m.pic.SetResource(m.m.avatarResource())
