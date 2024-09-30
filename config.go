@@ -18,7 +18,7 @@ var (
 
 func (u *ui) addLogin(w fyne.Window, a fyne.App) {
 	content := u.loginContent(a)
-	dialog.ShowCustomConfirm("Choose server to add", "Log In", "Cancel",
+	d := dialog.NewCustomConfirm("Choose server to add", "Log In", "Cancel",
 		content, func(ok bool) {
 			if !ok {
 				return
@@ -30,6 +30,9 @@ func (u *ui) addLogin(w fyne.Window, a fyne.App) {
 			a.Preferences().SetString(prefix+prefServerTypeKey, selectedID)
 			go selectedLogin(prefix, a)
 		}, w)
+
+	d.Resize(fyne.NewSize(375, 240))
+	d.Show()
 }
 
 func (u *ui) loginContent(a fyne.App) fyne.CanvasObject {

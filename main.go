@@ -27,7 +27,7 @@ func main() {
 
 	u := &ui{win: w}
 	w.SetContent(u.makeUI(w, a))
-	w.Resize(fyne.NewSize(480, 320))
+	w.Resize(fyne.NewSize(520, 450))
 	go u.runLogins(w, a)
 	w.ShowAndRun()
 

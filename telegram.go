@@ -40,8 +40,12 @@ func (t *telegram) configure(u *ui) (fyne.CanvasObject, func(prefix string, a fy
 	return widget.NewForm(
 			&widget.FormItem{Text: "Telephone", Widget: tel}),
 		func(prefix string, a fyne.App) {
-			a.Preferences().SetString(prefix+prefTelegramTelKey, tel.Text)
+			if tel.Text == "" {
+				dialog.ShowInformation("Missing information", "Telephone is required", t.app.Driver().AllWindows()[0])
+				return
+			}
 
+			a.Preferences().SetString(prefix+prefTelegramTelKey, tel.Text)
 			t.login(prefix, u)
 		}
 }

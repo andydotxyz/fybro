@@ -53,6 +53,7 @@ func (u *ui) makeUI(w fyne.Window, a fyne.App) fyne.CanvasObject {
 		})
 	u.servers.OnSelected = func(id widget.ListItemID) {
 		if u.data == nil || id == len(u.data.servers) {
+			u.servers.Unselect(id)
 			u.addLogin(w, a)
 			return
 		}
