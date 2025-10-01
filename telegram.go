@@ -126,11 +126,13 @@ func (t *telegram) loadServers(s *ext.Context, prefix string, u *ui) {
 		u.data = &appData{}
 	}
 	u.data.servers = append(u.data.servers, srv)
-	if len(u.data.servers) > 0 {
-		u.currentServer = u.data.servers[0]
-		u.servers.Select(0)
-	}
-	u.servers.Refresh()
+	fyne.Do(func() {
+		if len(u.data.servers) > 0 {
+			u.currentServer = u.data.servers[0]
+			u.servers.Select(0)
+		}
+		u.servers.Refresh()
+	})
 
 	// try group chats
 	ret, err := s.Raw.MessagesGetDialogs(s, &tg.MessagesGetDialogsRequest{OffsetPeer: &tg.InputPeerEmpty{}})
@@ -138,19 +140,22 @@ func (t *telegram) loadServers(s *ext.Context, prefix string, u *ui) {
 		fyne.LogError("Unknown protocol error", err)
 	}
 	for _, c := range ret.(*tg.MessagesDialogsSlice).Chats {
-		chat := c.(*tg.Chat)
-		chn := &channel{name: chat.Title, id: strconv.Itoa(int(chat.ID)), direct: false, server: srv}
+		// TODO: channels, etc?
+		switch chat := c.(type) {
+		case *tg.Chat:
+			chn := &channel{name: chat.Title, id: strconv.Itoa(int(chat.ID)), direct: false, server: srv}
 
-		if len(srv.channels) == 0 {
-			id, _ := strconv.Atoi(chn.id)
-			chn.messages = t.loadMessages(s, int64(id), false)
-			if srv == u.currentServer {
-				u.setChannel(chn)
+			if len(srv.channels) == 0 {
+				id, _ := strconv.Atoi(chn.id)
+				chn.messages = t.loadMessages(s, int64(id), false)
+				if srv == u.currentServer {
+					fyne.Do(func() { u.setChannel(chn) })
+				}
 			}
+			srv.channels = append(srv.channels, chn)
 		}
-		srv.channels = append(srv.channels, chn)
 	}
-	u.channels.Refresh()
+	fyne.Do(u.channels.Refresh)
 
 	// direct messages
 	contacts, err := s.Raw.ContactsGetTopPeers(s, &tg.ContactsGetTopPeersRequest{Correspondents: true})
@@ -163,13 +168,13 @@ func (t *telegram) loadServers(s *ext.Context, prefix string, u *ui) {
 				cid, _ := strconv.Atoi(chn.id)
 				chn.messages = t.loadMessages(s, int64(cid), true)
 				if srv == u.currentServer {
-					u.setChannel(chn)
+					fyne.Do(func() { u.setChannel(chn) })
 				}
 			}
 			srv.channels = append(srv.channels, chn)
 		}
 	}
-	u.channels.Refresh()
+	fyne.Do(u.channels.Refresh)
 
 	for i, c := range srv.channels {
 		if i == 0 {
@@ -195,27 +200,41 @@ func (t *telegram) loadMessages(s *ext.Context, id int64, direct bool) []*messag
 	}
 
 	var list []*message
-	ms := ret.(*tg.MessagesMessagesSlice).Messages
-	for i := len(ms) - 1; i >= 0; i-- { // newest message is first in response
-		data, ok := ms[i].AsNotEmpty()
-		if !ok {
-			log.Println("Could not parse message")
-			continue
-		}
 
-		m := data.(*tg.Message)
-		from := id
-		if m.FromID != nil {
-			from = m.FromID.(*tg.PeerUser).UserID
+	switch msgs := ret.(type) {
+	//	case *tg.MessagesMessages: // messages.messages#8c718e87
+	//	case *tg.MessagesMessagesSlice: // messages.messagesSlice#762b263d
+	//	case *tg.MessagesChannelMessages: // messages.channelMessages#c776ba4e
+	//	case *tg.MessagesMessagesNotModified: // messages.messagesNotModified#74535f21
+	case *tg.MessagesMessagesSlice:
+		ms := msgs.Messages
+		for i := len(ms) - 1; i >= 0; i-- { // newest message is first in response
+			data, ok := ms[i].AsNotEmpty()
+			if !ok {
+				log.Println("Could not parse message")
+				continue
+			}
+
+			// TODO: MessageService?
+			switch m := data.(type) {
+			case *tg.Message:
+				from := id
+				if m.FromID != nil {
+					from = m.FromID.(*tg.PeerUser).UserID
+				}
+				msg := &message{content: m.Message, user: t.getUser(from)}
+				list = append(list, msg)
+			}
 		}
-		msg := &message{content: m.Message, user: t.getUser(from)}
-		list = append(list, msg)
 	}
 
 	return list
 }
 
 func (t *telegram) send(ch *channel, text string) {
+	if len(text) == 0 {
+		return
+	}
 	id, _ := strconv.Atoi(ch.id)
 	send := msg2.NewSender(t.proto.API())
 	var builder *msg2.RequestBuilder
