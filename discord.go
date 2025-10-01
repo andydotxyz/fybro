@@ -135,7 +135,7 @@ func (d *discord) loadServers(s *session.Session, u *ui) {
 		}
 		ch.messages = append(ch.messages, msg)
 		if ch == u.currentChannel {
-			u.appendMessages([]*message{msg})
+			fyne.Do(func() { u.appendMessages([]*message{msg}) })
 		}
 	})
 
