@@ -232,6 +232,9 @@ func (t *telegram) loadMessages(s *ext.Context, id int64, direct bool) []*messag
 }
 
 func (t *telegram) send(ch *channel, text string) {
+	if len(text) == 0 {
+		return
+	}
 	id, _ := strconv.Atoi(ch.id)
 	send := msg2.NewSender(t.proto.API())
 	var builder *msg2.RequestBuilder
