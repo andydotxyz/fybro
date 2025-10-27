@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
-	"log"
 	"strings"
 	"sync"
 	"time"
@@ -43,12 +42,17 @@ func (w *whatsApp) configure(u *ui) (fyne.CanvasObject, func(prefix string, a fy
 	return widget.NewLabel("Open WhatsApp on your phone and\nprepare to scan QR code"), func(prefix string, a fyne.App) {
 		qrChan := make(chan string)
 		var qrScreen dialog.Dialog
+
+		scale := u.win.Canvas().Scale()
 		go func() {
-			png, _ := qrcode.Encode(<-qrChan, qrcode.Medium, int(200*u.win.Canvas().Scale()))
-			img := canvas.NewImageFromReader(bytes.NewReader(png), "qr.png")
-			img.SetMinSize(fyne.NewSize(200, 200))
-			qrScreen = dialog.NewCustom("WhatsApp QR scan", "Cancel", img, u.win)
-			qrScreen.Show()
+			png, _ := qrcode.Encode(<-qrChan, qrcode.Medium, int(200*scale))
+
+			fyne.Do(func() {
+				img := canvas.NewImageFromReader(bytes.NewReader(png), "qr.png")
+				img.SetMinSize(fyne.NewSize(200, 200))
+				qrScreen = dialog.NewCustom("WhatsApp QR scan", "Cancel", img, u.win)
+				qrScreen.Show()
+			})
 		}()
 
 		sess, err := w.conn.Login(qrChan)
@@ -89,7 +93,7 @@ func (w *whatsApp) login(prefix string, u *ui) {
 			ServerToken: p.String(prefix + prefWhatsServerTokenKey)}
 		_, err := w.conn.RestoreWithSession(load)
 		if err != nil {
-			log.Println("Failed to recover WhatsApp session", err)
+			fyne.LogError("Failed to recover WhatsApp session", err)
 			return
 		}
 	}
@@ -115,7 +119,7 @@ func (w *whatsApp) send(ch *channel, text string) {
 	_, err := w.conn.Send(whatsapp.TextMessage{Text: text, Info: whatsapp.MessageInfo{
 		RemoteJid: ch.id}})
 	if err != nil {
-		log.Println("Error sending", err)
+		fyne.LogError("Error sending", err)
 		return
 	}
 
@@ -133,7 +137,7 @@ func (w *whatsApp) setupClient(secs int) *whatsapp.Conn {
 }
 
 func (w *whatsApp) HandleError(err error) {
-	log.Println("WhatsApp error", err)
+	fyne.LogError("WhatsApp error", err)
 }
 
 func (w *whatsApp) HandleTextMessage(m whatsapp.TextMessage) {
@@ -166,7 +170,7 @@ func (w *whatsApp) HandleTextMessage(m whatsapp.TextMessage) {
 				ch.name = w.getUser(m.Info.RemoteJid).name
 			}
 		} else {
-			log.Println("get channel title error", err)
+			fyne.LogError("get channel title error", err)
 		}
 	}
 	ch.messages = append(ch.messages, msg)

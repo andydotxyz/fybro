@@ -61,8 +61,10 @@ func (t *telegram) getUser(id int64) *user {
 	}
 
 	data, err := t.context.Raw.UsersGetUsers(t.context, []tg.InputUserClass{&tg.InputUser{UserID: id}})
-	if err != nil || len(data) == 0 {
-		fyne.LogError("Failed to download user info", err)
+	if len(data) == 0 {
+		if err != nil {
+			fyne.LogError("Failed to download user info", err)
+		}
 		return nil
 	}
 
@@ -110,9 +112,7 @@ func (t *telegram) login(prefix string, u *ui) {
 	t.context = client.CreateContext()
 
 	client.Dispatcher.AddHandler(&updateHandler{t: t, u: u})
-	go func() {
-		client.Idle()
-	}()
+	go client.Idle()
 
 	t.loadServers(t.context, prefix, u)
 }
@@ -199,7 +199,7 @@ func (t *telegram) loadMessages(s *ext.Context, id int64, direct bool) []*messag
 	for i := len(ms) - 1; i >= 0; i-- { // newest message is first in response
 		data, ok := ms[i].AsNotEmpty()
 		if !ok {
-			log.Println("Could not parse message")
+			fyne.LogError("Could not parse message", nil)
 			continue
 		}
 
@@ -306,7 +306,7 @@ func (u *updateHandler) CheckUpdate(_ *ext.Context, up *ext.Update) error {
 		if m.FromID != nil {
 			from = m.FromID.(*tg.PeerUser).UserID
 		} else {
-			log.Println("unknown from")
+			fyne.LogError("unknown from", nil)
 		}
 		msg := &message{content: m.Message.Message, user: u.t.getUser(from)}
 
@@ -316,7 +316,7 @@ func (u *updateHandler) CheckUpdate(_ *ext.Context, up *ext.Update) error {
 		} else if c, ok := m.PeerID.(*tg.PeerChat); ok {
 			cid = c.ChatID
 		} else {
-			log.Println("Unknown type", m.PeerID)
+			fyne.LogError("Unknown type "+m.PeerID.String(), nil)
 		}
 
 		ch := findServerChan(u.t.server, strconv.Itoa(int(cid)))

@@ -44,11 +44,13 @@ func (u *ui) runLogins(w fyne.Window, a fyne.App) {
 		prefPrefix := fmt.Sprintf(prefServerPrefix, i)
 		typeKey := prefPrefix + prefServerTypeKey
 
-		srv, err := connect(a.Preferences().String(typeKey), a)
-		if err != nil {
-			dialog.ShowError(err, w)
-			continue
-		}
-		srv.login(prefPrefix, u)
+		fyne.Do(func() {
+			srv, err := connect(a.Preferences().String(typeKey), a)
+			if err != nil {
+				dialog.ShowError(err, w)
+				return
+			}
+			srv.login(prefPrefix, u)
+		})
 	}
 }

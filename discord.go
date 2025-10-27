@@ -1,7 +1,6 @@
 package main
 
 import (
-	"log"
 	"strconv"
 
 	"fyne.io/fyne/v2"
@@ -99,7 +98,7 @@ func (d *discord) loadServers(s *session.Session, u *ui) {
 	var servers []*server
 	gs, err := s.Client.Guilds(0)
 	if err != nil {
-		log.Println("Error getting guilds")
+		fyne.LogError("Error getting guilds", err)
 		return
 	}
 	for _, g := range gs {
@@ -118,14 +117,14 @@ func (d *discord) loadServers(s *session.Session, u *ui) {
 
 	err = s.Open()
 	if err != nil {
-		log.Println("Error opening session", err)
+		fyne.LogError("Error opening session", err)
 		d.conn = nil
 		return
 	}
 	s.AddHandler(func(ev *gateway.MessageCreateEvent) {
 		ch := findChan(u.data, strconv.Itoa(int(ev.GuildID)), strconv.Itoa(int(ev.ChannelID)))
 		if ch == nil {
-			log.Println("Could not find channel for incoming message")
+			fyne.LogError("Could not find channel for incoming message", nil)
 			return
 		}
 
@@ -150,7 +149,7 @@ func (d *discord) login(prefix string, u *ui) {
 			d.loadServers(sess, u)
 			return
 		} else {
-			log.Println("Error connecting with token", err)
+			fyne.LogError("Error connecting with token", err)
 		}
 	}
 }
@@ -169,7 +168,7 @@ func (d *discord) doLogin(email, pass string, p fyne.Preferences, prefix string,
 	}
 
 	if err != session.ErrMFA {
-		log.Println("Login Err", err)
+		fyne.LogError("Login Err", err)
 		return
 	}
 
@@ -184,7 +183,7 @@ func (d *discord) doLogin(email, pass string, p fyne.Preferences, prefix string,
 			}
 			sess, err := session.Login(email, pass, mfa.Text)
 			if err != nil {
-				log.Println("Failure in MFA verification")
+				fyne.LogError("Failure in MFA verification", err)
 				return
 			}
 
