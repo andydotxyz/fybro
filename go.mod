@@ -1,14 +1,14 @@
 module github.com/andydotxyz/fybro
 
-go 1.21
+go 1.23
 
-toolchain go1.21.6
+toolchain go1.24.9
 
 require (
 	fyne.io/fyne/v2 v2.7.0
 	github.com/Rhymen/go-whatsapp v0.1.1
 	github.com/celestix/gotgproto v1.0.0-beta18
-	github.com/diamondburned/arikawa v1.3.14
+	github.com/diamondburned/arikawa/v3 v3.6.0
 	github.com/glebarez/sqlite v1.10.0
 	github.com/gotd/td v0.102.0
 	github.com/skip2/go-qrcode v0.0.0-20190110000554-dc11ecdae0a9

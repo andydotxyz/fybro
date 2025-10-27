@@ -1,15 +1,16 @@
 package main
 
 import (
+	"context"
 	"strconv"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
-	"github.com/diamondburned/arikawa/gateway"
 
-	discapi "github.com/diamondburned/arikawa/discord"
-	"github.com/diamondburned/arikawa/session"
+	discapi "github.com/diamondburned/arikawa/v3/discord"
+	"github.com/diamondburned/arikawa/v3/gateway"
+	"github.com/diamondburned/arikawa/v3/session"
 )
 
 const prefDiscordTokenKey = "auth.token"
@@ -17,10 +18,11 @@ const prefDiscordTokenKey = "auth.token"
 type discord struct {
 	app  fyne.App
 	conn *session.Session
+	ctx  context.Context
 }
 
 func initDiscord(a fyne.App) service {
-	return &discord{app: a}
+	return &discord{app: a, ctx: context.Background()}
 }
 
 func (d *discord) configure(u *ui) (fyne.CanvasObject, func(prefix string, a fyne.App)) {
@@ -115,7 +117,7 @@ func (d *discord) loadServers(s *session.Session, u *ui) {
 	}
 	u.servers.Refresh()
 
-	err = s.Open()
+	err = s.Open(d.ctx)
 	if err != nil {
 		fyne.LogError("Error opening session", err)
 		d.conn = nil
@@ -144,23 +146,17 @@ func (d *discord) loadServers(s *session.Session, u *ui) {
 func (d *discord) login(prefix string, u *ui) {
 	tok := d.app.Preferences().String(prefix + prefDiscordTokenKey)
 	if tok != "" {
-		sess, err := session.New(tok)
-		if err == nil {
-			d.loadServers(sess, u)
-			return
-		} else {
-			fyne.LogError("Error connecting with token", err)
-		}
+		d.loadServers(session.New(tok), u)
 	}
 }
 
 func (d *discord) send(ch *channel, text string) {
 	id, _ := strconv.Atoi(ch.id)
-	d.conn.SendText(discapi.ChannelID(id), text)
+	d.conn.SendMessage(discapi.ChannelID(id), text)
 }
 
 func (d *discord) doLogin(email, pass string, p fyne.Preferences, prefix string, u *ui) {
-	sess, err := session.Login(email, pass, "")
+	sess, err := session.Login(d.ctx, email, pass, "")
 	if err == nil {
 		p.SetString(prefix+prefDiscordTokenKey, sess.Token)
 		d.loadServers(sess, u)
@@ -181,7 +177,7 @@ func (d *discord) doLogin(email, pass string, p fyne.Preferences, prefix string,
 			if !ok {
 				return
 			}
-			sess, err := session.Login(email, pass, mfa.Text)
+			sess, err := session.Login(d.ctx, email, pass, mfa.Text)
 			if err != nil {
 				fyne.LogError("Failure in MFA verification", err)
 				return
